@@ -2,18 +2,22 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 2 of the build: the Ingestor and Watcher Pass A (triage).
+**Status:** Step 3 of the build: the Ingestor, Watcher Pass A (triage) and Pass B (deep look).
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
                                                              │
                      Watcher Pass A (Gemini Flash triage) ◄──┘──► triage.jsonl
+                                                             │ yes / unsure only
+                     Watcher Pass B (Gemini Pro, real video) ◄┘──► deep.jsonl
+                                                                   costs.jsonl (every call)
 ```
 
 | Stage | What it does | Uses an LLM? |
 |---|---|---|
 | Ingestor | Cuts the film into 20–90 s segments, saves 3 keyframes each, attaches subtitle lines | No |
 | Watcher Pass A | Asks a cheap vision model, for each segment: "does a software system act here?" | Yes (`gemini-3.8-flash`) |
+| Watcher Pass B | Sends a small video clip of each flagged segment to a Pro model, which lists timestamped observations (tagged observed / necessary / plausible / speculative) and the capabilities a real team could build | Yes (`gemini-3.1-pro-preview`) |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -58,6 +62,22 @@ Expected result: one line per segment (`S004   92.0s  yes    holographic display
 - Running it again skips finished segments, so a stopped run resumes without paying twice.
 - If you get a 404 for the model, set `$env:MOVIETECH_TRIAGE_MODEL = "gemini-2.5-pro"` and retry.
 
+**5. Deep look (paid: about $0.50–$1.50 for Tears of Steel, estimated)**
+```powershell
+python -m movietech deep C:\movietech\output\tos --video C:\movietech\input\tears_of_steel.webm
+```
+Expected result: one line per flagged segment (`S002   25.0s  software    3 obs  live 3D wireframe scan; ...`), then the estimated spend.
+- A run stops at **$3.00** by default. Change it with `$env:MOVIETECH_DEEP_MAX_USD = "5.00"`.
+- Clips are saved in `C:\movietech\output\tos\clips\` and reused on rerun.
+- If you get a 404 for the model, set `$env:MOVIETECH_DEEP_MODEL = "gemini-2.5-pro"` and retry.
+- If you get a 400 about thinking level, set `$env:MOVIETECH_DEEP_THINKING = "high"` and retry.
+
+**6. See where the money went (free)**
+```powershell
+python -m movietech costs C:\movietech\output\tos
+```
+Expected result: one line per stage with calls, tokens and dollars, then a total.
+
 **Teardown**
 ```powershell
 deactivate
@@ -74,6 +94,9 @@ movietech/
   schemas.py         Pydantic contracts between stages
   ingest.py          Stage 0: Ingestor
   watcher_triage.py  Watcher Pass A
+  watcher_deep.py    Watcher Pass B
+  costs.py           cost cap and per-call ledger (costs.jsonl)
+  gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
 tests/               pytest; Gemini is faked so CI needs no keys
 ```
