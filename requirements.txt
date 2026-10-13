@@ -1,0 +1,4 @@
+scenedetect==0.7.2
+google-genai==2.29.0
+pydantic==2.14.1
+srt==3.5.3

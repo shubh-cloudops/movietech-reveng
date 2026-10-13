@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+# Let `pytest` import the movietech package from the repo root without installing it.
+pythonpath = ["."]
+testpaths = ["tests"]
