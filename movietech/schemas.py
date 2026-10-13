@@ -123,3 +123,30 @@ class CapabilityCards(BaseModel):
 
     cards: list[CapabilityCard]
     dropped: list[DroppedCapability]
+
+
+class VisionBrief(BaseModel):
+    """Your intended use for one capability, read from vision_<name>.md. No model writes this."""
+
+    title: str
+    who_uses_it: str
+    use_case: str
+    where_it_runs: str
+    must_haves: list[str] = Field(min_length=1, max_length=5)
+    out_of_scope: list[str]
+    constraints: list[str]
+    success_measure: str = Field(description="the 'How I'll know it works' line")
+
+
+class GateSelection(BaseModel):
+    """One card you picked, with the brief that says how you want it used."""
+
+    card: CapabilityCard
+    brief: VisionBrief
+    brief_file: str
+
+
+class GateResult(BaseModel):
+    """Output of the human gate: what the Architect will plan for."""
+
+    selections: list[GateSelection] = Field(min_length=1, max_length=3)

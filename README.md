@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 4 of the build: the Ingestor and Watcher Passes A (triage), B (deep look) and C (capability cards).
+**Status:** Step 5 of the build: the Ingestor, Watcher Passes A–C, and the human gate.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -12,6 +12,8 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
                      Watcher Pass B (Gemini Pro, real video) ◄┘──► deep.jsonl
                                                              │
                      Watcher Pass C (Claude Opus)           ◄┘──► cards.json + cards.md
+                                                             │
+                     Human gate (you: 1-3 cards + Vision Briefs) ◄┘──► gate.json
                                                                    costs.jsonl (every call)
 ```
 
@@ -21,6 +23,7 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Watcher Pass A | Asks a cheap vision model, for each segment: "does a software system act here?" | Yes (`gemini-3.8-flash`) |
 | Watcher Pass B | Sends a small video clip of each flagged segment to a Pro model, which lists timestamped observations (tagged observed / necessary / plausible / speculative) and the capabilities a real team could build | Yes (`gemini-3.1-pro-preview`) |
 | Watcher Pass C | Merges the deep-look notes into a short list of capability cards: behaviour, evidence, feasibility, real-world analogues. Every raw capability ends up in a card or in a "dropped" list with a reason | Yes (`claude-opus-5-5`) |
+| Human gate | You pick 1–3 cards and write a Vision Brief for each: who uses it, where it runs, must-haves, out of scope, how you'll know it works. The code checks every brief and lists all problems at once | No |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -84,7 +87,18 @@ Expected result: one line per card (`C01  buildable_now  observed  Live 3D wiref
 - `Warning:` lines mean the model left a capability unaccounted for or cited a segment that doesn't exist. Rerun, or tell us.
 - A `401`/`authentication_error` means `ANTHROPIC_API_KEY` isn't set in this window.
 
-**7. See where the money went (free)**
+**7. Human gate (free)**
+
+Copy `templates\vision-brief-template.md` to `C:\movietech\input\vision_<name>.md`, fill it in for the card you picked, then:
+```powershell
+python -m movietech gate C:\movietech\output\tos --pick C06 C:\movietech\input\vision_captions.md
+```
+Add another `--pick CARD_ID FILE` for each extra card (up to 3).
+Expected result: `C06  Live Spatial Speech Captions  <-  vision_captions.md (3 must-haves)` and `Accepted.`
+- `Not accepted:` lists every problem in your brief; fix them and rerun.
+- Keep the headings exactly as in the template. Everything after the `---` line (the made-up example) is ignored.
+
+**8. See where the money went (free)**
 ```powershell
 python -m movietech costs C:\movietech\output\tos
 ```
@@ -108,6 +122,8 @@ movietech/
   watcher_triage.py  Watcher Pass A
   watcher_deep.py    Watcher Pass B
   watcher_cards.py   Watcher Pass C
+  gate.py            human gate: Vision Brief parser and card picks
+templates/           Vision Brief template you copy and fill in
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
