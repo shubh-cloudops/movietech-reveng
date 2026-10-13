@@ -20,6 +20,9 @@ def main() -> None:
     p_deep.add_argument("run_dir", type=Path, help="folder created by ingest and triage")
     p_deep.add_argument("--video", type=Path, required=True, help="the same video given to ingest")
 
+    p_cards = sub.add_parser("cards", help="Watcher Pass C: merge deep-look results into cards")
+    p_cards.add_argument("run_dir", type=Path, help="folder with deep.jsonl")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -46,6 +49,16 @@ def main() -> None:
         caps = sum(len(r.capabilities) for r in real)
         print(f"{len(real)} of {len(results)} flagged segments show software; "
               f"{caps} capabilities named. Wrote {args.run_dir / 'deep.jsonl'}")
+    elif args.command == "cards":
+        from movietech.watcher_cards import make_cards
+
+        cards, warnings = make_cards(args.run_dir)
+        for c in cards.cards:
+            print(f"{c.card_id}  {c.feasibility:<22} {c.strongest_evidence:<11} {c.name}")
+        for w in warnings:
+            print(f"Warning: {w}")
+        print(f"{len(cards.cards)} cards, {len(cards.dropped)} dropped. "
+              f"Read {args.run_dir / 'cards.md'}")
     elif args.command == "costs":
         from movietech.costs import summarise
 
