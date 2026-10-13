@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 7 of the build: the Ingestor, Watcher Passes A–C, the human gate, the Architect, the Lead Developer and the Test Engineer.
+**Status:** Step 8 of the build: everything up to the Test Engineer, plus the War Room's review round (Skeptic, Grounder, Cost/Ops Reviewer). The Chairman and the revise loop come next.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -20,6 +20,11 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
                      Lead Developer (Claude Opus)           ◄┘──► plan/tasks.json + .md
                                                              │
                      Test Engineer (Claude Opus)            ◄┘──► plan/tests.json + .md
+                                                             │
+                     War Room review                        ◄┘──► plan/review_r1.json + .md
+                       Skeptic (Gemini Pro)                         debate_log.jsonl
+                       Grounder (Haiku + npm, PyPI, GitHub)
+                       Cost/Ops Reviewer (Haiku)
                                                                    costs.jsonl (every call)
 ```
 
@@ -33,6 +38,7 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Architect | Designs components, data flow and one ADR per significant choice, serving every must-have and building nothing out of scope. Where the film and your brief disagree it asks you instead of choosing. Code then checks coverage | Yes (`claude-opus-5-5`) |
 | Lead Developer | Breaks the design into milestones of tasks of a day or less, local first, each with files, dependencies and a "done when" result, plus a teardown. Code checks every component and must-have has a task and every dependency comes earlier | Yes (`claude-opus-5-5`) |
 | Test Engineer | A separate call writes Given/When/Then acceptance tests with exact run commands and the CI steps. Code checks every task and must-have is tested and the success measure is proved | Yes (`claude-opus-5-5`) |
+| War Room review | Three independent reviewers. The **Skeptic** runs on Gemini, a different model family from the Claude authors, so it doesn't share their blind spots; it checks the plan against your brief and the film. The **Grounder** has Haiku name every package, then plain code checks each on the live npm, PyPI and GitHub registries (exists, maintained, licence). The **Cost/Ops Reviewer** estimates the monthly bill and checks teardown, secrets and monitoring. Each must pass or fail every rubric item with a reason, not just say "looks good". Code then checks the hard gates: no open blockers, every dependency verified, every rubric item passed | Yes (`gemini-3.1-pro-preview`, `claude-haiku-5-5`) |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -130,7 +136,15 @@ python -m movietech tests C:\movietech\output\tos
 Expected result: `N tests: ...` by kind (unit, integration, end to end, manual), then `Read ...\plan\tests.md`.
 - `Run tasks first.` means step 9 hasn't run in this run folder.
 
-**11. See where the money went (free)**
+**11. War Room review (paid: about $0.25–$0.45, estimated; never more than about $0.50)**
+```powershell
+python -m movietech review C:\movietech\output\tos
+```
+Expected result: counts of blocker, major and minor objections with their ids, `Grounding: N/M dependencies verified`, the estimated monthly cloud cost, the gates, then `Read ...\plan\review_r1.md`.
+- `Gates: N failing.` is normal on a first round: that's the War Room doing its job. The Chairman (next step of the build) will route each objection to the author who fixes it.
+- A grounding row with status `error` means a lookup failed (often GitHub's 60-requests-an-hour limit). Optional: set a GitHub token with no scopes as `GITHUB_TOKEN` to raise the limit to 5,000.
+
+**12. See where the money went (free)**
 ```powershell
 python -m movietech costs C:\movietech\output\tos
 ```
@@ -158,6 +172,8 @@ movietech/
   architect.py       Architect agent and its coverage check
   lead_dev.py        Lead Developer agent and its plan check
   tester.py          Test Engineer agent and its coverage check
+  review.py          War Room review round: Skeptic, Grounder, Cost/Ops, hard gates
+  registries.py      Grounder lookups on npm, PyPI and GitHub (plain code, no model)
   claude.py          one structured Claude call: budget pre-check, streaming, fallbacks
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls

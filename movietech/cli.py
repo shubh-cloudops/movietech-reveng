@@ -38,6 +38,9 @@ def main() -> None:
     p_tests = sub.add_parser("tests", help="Test Engineer: write acceptance tests for the tasks")
     p_tests.add_argument("run_dir", type=Path, help="folder with plan/tasks.json")
 
+    p_review = sub.add_parser("review", help="War Room: Skeptic, Grounder and Cost/Ops review")
+    p_review.add_argument("run_dir", type=Path, help="folder with plan/tests.json")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -121,6 +124,21 @@ def main() -> None:
         for p in problems:
             print(f"Problem: {p}")
         print(f"Read {args.run_dir / 'plan' / 'tests.md'}")
+    elif args.command == "review":
+        from movietech.review import gates, review
+
+        r, warnings = review(args.run_dir)
+        for sev in ("blocker", "major", "minor"):
+            found = [o.objection_id for o in r.objections if o.severity == sev]
+            print(f"{sev:<8} {len(found):>2}  {', '.join(found)}")
+        ok = sum(g.status == "ok" for g in r.grounding)
+        print(f"Grounding: {ok}/{len(r.grounding)} dependencies verified on the registries.")
+        print(f"Estimated monthly cloud cost: ${r.monthly_cost_usd:.2f}")
+        for w in warnings:
+            print(f"Warning: {w}")
+        failed = gates(r)
+        print("Gates: all pass." if not failed else f"Gates: {len(failed)} failing.")
+        print(f"Read {args.run_dir / 'plan' / f'review_r{r.round}.md'}")
     elif args.command == "costs":
         from movietech.costs import summarise
 
@@ -128,8 +146,8 @@ def main() -> None:
         if not totals:
             print("No costs.jsonl yet. Costs are logged from this version on.")
         for stage, t in totals.items():
-            print(f"{stage:<9} {int(t['calls']):>4} calls  in {int(t['input_tokens']):>9,}  "
+            print(f"{stage:<16} {int(t['calls']):>4} calls  in {int(t['input_tokens']):>9,}  "
                   f"out {int(t['output_tokens']):>7,}  thinking {int(t['thinking_tokens']):>7,}  "
                   f"${t['usd']:.4f}")
         if totals:
-            print(f"{'total':<9} ${sum(t['usd'] for t in totals.values()):.4f}")
+            print(f"{'total':<16} ${sum(t['usd'] for t in totals.values()):.4f}")

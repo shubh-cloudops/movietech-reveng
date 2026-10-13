@@ -278,3 +278,93 @@ class AcceptancePlan(BaseModel):
     tests: list[AcceptanceTest]
     ci_steps: list[str] = Field(description="ordered GitHub Actions steps that run the "
                                             "automated tests")
+
+
+# --- War Room: review round ---------------------------------------------------
+
+Severity = Literal["blocker", "major", "minor"]
+
+
+class ObjectionDraft(BaseModel):
+    """One problem a reviewer found, as the reviewer writes it."""
+
+    section: str = Field(description="the id it is about (A3, T07, AT05, ADR-002) or 'brief', "
+                                     "'architecture', 'tasks', 'tests'")
+    severity: Severity = Field(description="blocker: the plan fails the brief or cannot work; "
+                                           "major: a real gap to fix; minor: an improvement")
+    issue: str
+    evidence: str = Field(description="what in the plan, brief or film shows the problem")
+    proposed_fix: str
+
+
+class Objection(ObjectionDraft):
+    """An objection with its id and author, as stored in the debate log."""
+
+    objection_id: str = Field(description="SK01, GR01, CO01, ...")
+    reviewer: Literal["skeptic", "grounder", "cost_ops"]
+
+
+class RubricCheck(BaseModel):
+    """A reviewer cannot just say 'looks good': each rubric item is passed or failed, with why."""
+
+    item: str
+    passed: bool
+    reason: str
+
+
+class Review(BaseModel):
+    """What the Skeptic returns."""
+
+    objections: list[ObjectionDraft]
+    checks: list[RubricCheck] = Field(description="one entry per rubric item")
+
+
+class CostReview(Review):
+    """What the Cost/Ops Reviewer returns."""
+
+    monthly_cost_usd: float = Field(description="estimated monthly cloud cost once deployed, "
+                                                "after free tiers")
+    cost_breakdown: list[str] = Field(description="one line per paid or free-tier resource: "
+                                                  "service, usage assumed, monthly cost")
+
+
+class Dependency(BaseModel):
+    """A package or repository the plan relies on, as named in a public registry."""
+
+    ecosystem: Literal["npm", "pypi", "github"]
+    name: str = Field(description="exact registry name, e.g. '@huggingface/transformers', "
+                                  "'fastapi', or 'owner/repo' for github")
+    used_for: str
+    component_ids: list[str]
+
+
+class DependencyList(BaseModel):
+    """What the Grounder's model extracts from the plan. Code then checks each one."""
+
+    dependencies: list[Dependency]
+    not_checkable: list[str] = Field(description="named technologies with no public registry "
+                                                 "entry, e.g. AWS services or browser APIs")
+
+
+class Grounding(BaseModel):
+    """One registry lookup, done by code, not by a model."""
+
+    ecosystem: str
+    name: str
+    status: Literal["ok", "missing", "archived", "stale", "license", "error"]
+    latest_version: str = ""
+    last_release: str = Field("", description="YYYY-MM-DD")
+    license: str = ""
+    note: str = ""
+
+
+class ReviewRound(BaseModel):
+    """Everything one War Room review round produced."""
+
+    round: int
+    objections: list[Objection]
+    checks: dict[str, list[RubricCheck]]
+    grounding: list[Grounding]
+    not_checkable: list[str]
+    monthly_cost_usd: float
+    cost_breakdown: list[str]
