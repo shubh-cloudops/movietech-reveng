@@ -73,3 +73,53 @@ class DeepLookResult(DeepLook):
     start: float
     end: float
     model: str
+
+
+Evidence = Literal["observed", "necessary", "plausible", "speculative"]
+
+
+class EvidenceRef(BaseModel):
+    """One moment in the film that supports a capability card."""
+
+    segment_id: str
+    at: float = Field(description="seconds from film start, copied from the observation")
+    what_happens: str
+    evidence: Evidence
+
+
+class CapabilityCard(BaseModel):
+    """One buildable software capability, described as a black box: behaviour, not internals."""
+
+    card_id: str = Field(description="C01, C02, ... in the order given")
+    name: str = Field(description="short product-style name")
+    what_it_does: str = Field(description="observable behaviour in 1-3 sentences, no "
+                                          "implementation details")
+    how_people_use_it: str = Field(description="who interacts with it and how: voice, gesture, "
+                                               "touch, automatic")
+    evidence: list[EvidenceRef]
+    strongest_evidence: Evidence
+    feasibility: Literal["buildable_now", "buildable_with_effort", "research_needed",
+                         "fiction_only"] = Field(
+        description="buildable_now: a small team could ship it with today's tools; "
+                    "buildable_with_effort: possible but hard or costly; research_needed: "
+                    "open research problem; fiction_only: breaks known physics or computing")
+    feasibility_reason: str
+    real_world_analogues: list[str] = Field(description="existing products, libraries or "
+                                                        "research you believe are similar; "
+                                                        "unverified until the Grounder checks")
+    hardware_needed: list[str] = Field(description="hardware beyond a normal PC or phone, if any")
+    merged_from: list[str] = Field(description="the exact raw capability names this card covers")
+
+
+class DroppedCapability(BaseModel):
+    """A raw capability that became no card, and why: keeps every input accounted for."""
+
+    name: str
+    reason: str
+
+
+class CapabilityCards(BaseModel):
+    """Output of Watcher Pass C."""
+
+    cards: list[CapabilityCard]
+    dropped: list[DroppedCapability]

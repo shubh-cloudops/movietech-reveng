@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 3 of the build: the Ingestor, Watcher Pass A (triage) and Pass B (deep look).
+**Status:** Step 4 of the build: the Ingestor and Watcher Passes A (triage), B (deep look) and C (capability cards).
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -10,6 +10,8 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
                      Watcher Pass A (Gemini Flash triage) ◄──┘──► triage.jsonl
                                                              │ yes / unsure only
                      Watcher Pass B (Gemini Pro, real video) ◄┘──► deep.jsonl
+                                                             │
+                     Watcher Pass C (Claude Opus)           ◄┘──► cards.json + cards.md
                                                                    costs.jsonl (every call)
 ```
 
@@ -18,6 +20,7 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Ingestor | Cuts the film into 20–90 s segments, saves 3 keyframes each, attaches subtitle lines | No |
 | Watcher Pass A | Asks a cheap vision model, for each segment: "does a software system act here?" | Yes (`gemini-3.8-flash`) |
 | Watcher Pass B | Sends a small video clip of each flagged segment to a Pro model, which lists timestamped observations (tagged observed / necessary / plausible / speculative) and the capabilities a real team could build | Yes (`gemini-3.1-pro-preview`) |
+| Watcher Pass C | Merges the deep-look notes into a short list of capability cards: behaviour, evidence, feasibility, real-world analogues. Every raw capability ends up in a card or in a "dropped" list with a reason | Yes (`claude-opus-5-5`) |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -25,7 +28,7 @@ Why the split: the cheap, repeatable work is plain code, and only the judgement 
 
 ## Run it on Windows 11 (PowerShell)
 
-Prerequisites from step 1: Python 3.12, Git, ffmpeg, a `GEMINI_API_KEY` user environment variable, and `C:\movietech\input\tears_of_steel.mkv`.
+Prerequisites from step 1: Python 3.12, Git, ffmpeg, `GEMINI_API_KEY` and `ANTHROPIC_API_KEY` user environment variables, and `C:\movietech\input\tears_of_steel.mkv`.
 
 **1. Clone and create a virtual environment**
 ```powershell
@@ -72,7 +75,16 @@ Expected result: one line per flagged segment (`S002   25.0s  software    3 obs 
 - If you get a 404 for the model, set `$env:MOVIETECH_DEEP_MODEL = "gemini-2.5-pro"` and retry.
 - If you get a 400 about thinking level, set `$env:MOVIETECH_DEEP_THINKING = "high"` and retry.
 
-**6. See where the money went (free)**
+**6. Capability cards (paid: about $0.20–$0.60, estimated; never more than about $0.70)**
+```powershell
+python -m movietech cards C:\movietech\output\tos
+```
+Expected result: one line per card (`C01  buildable_now  observed  Live 3D wireframe scanner`), then `Read C:\movietech\output\tos\cards.md`. Open `cards.md` to choose what to build.
+- Before calling, it checks the worst case (a full 32,000-token answer) against a **$2.00** cap (`MOVIETECH_CARDS_MAX_USD`).
+- `Warning:` lines mean the model left a capability unaccounted for or cited a segment that doesn't exist. Rerun, or tell us.
+- A `401`/`authentication_error` means `ANTHROPIC_API_KEY` isn't set in this window.
+
+**7. See where the money went (free)**
 ```powershell
 python -m movietech costs C:\movietech\output\tos
 ```
@@ -95,6 +107,7 @@ movietech/
   ingest.py          Stage 0: Ingestor
   watcher_triage.py  Watcher Pass A
   watcher_deep.py    Watcher Pass B
+  watcher_cards.py   Watcher Pass C
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
