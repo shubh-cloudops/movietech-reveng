@@ -312,11 +312,23 @@ class RubricCheck(BaseModel):
     reason: str
 
 
+class Verdict(BaseModel):
+    """A reviewer's check of one of its own earlier objections after the authors revised.
+    Only the reviewer who raised an objection can close it."""
+
+    objection_id: str
+    closed: bool
+    reason: str
+
+
 class Review(BaseModel):
     """What the Skeptic returns."""
 
-    objections: list[ObjectionDraft]
+    objections: list[ObjectionDraft] = Field(description="new problems only")
     checks: list[RubricCheck] = Field(description="one entry per rubric item")
+    verdicts: list[Verdict] = Field(default_factory=list,
+                                      description="one per earlier objection you raised, "
+                                                  "if any were listed")
 
 
 class CostReview(Review):
@@ -362,9 +374,48 @@ class ReviewRound(BaseModel):
     """Everything one War Room review round produced."""
 
     round: int
-    objections: list[Objection]
+    objections: list[Objection] = Field(description="raised this round")
+    verdicts: list[Verdict] = Field(default_factory=list,
+                                      description="raisers' checks of earlier objections")
+    carried: list[Objection] = Field(default_factory=list,
+                                     description="earlier objections still open")
     checks: dict[str, list[RubricCheck]]
     grounding: list[Grounding]
     not_checkable: list[str]
     monthly_cost_usd: float
     cost_breakdown: list[str]
+
+
+# --- War Room: Chairman and revisions ----------------------------------------
+
+Owner = Literal["architect", "lead_dev", "test_eng", "none"]
+
+
+class Ruling(BaseModel):
+    """The Chairman's decision on one objection. The Chairman never writes plan content."""
+
+    objection_id: str
+    decision: Literal["accept", "reject", "ask_user"]
+    owner: Owner = Field(description="who fixes it if accepted: architect (components, ADRs, "
+                                     "data flows, technology choices), lead_dev (tasks, "
+                                     "milestones, teardown, paid resources) or test_eng "
+                                     "(tests, CI); 'none' otherwise")
+    reason: str = Field(description="one line")
+    question_for_user: str = Field("", description="only for ask_user: one question the user "
+                                                   "can answer in a word or a sentence")
+
+
+class Triage(BaseModel):
+    rulings: list[Ruling]
+
+
+class LedgerEntry(BaseModel):
+    """One objection's whole life: raised, ruled on, fixed or not, closed by its raiser."""
+
+    objection: Objection
+    round_raised: int
+    status: Literal["new", "open", "closed", "rejected", "ask_user"] = "new"
+    owner: Owner = "none"
+    ruling_reason: str = ""
+    question_for_user: str = ""
+    closed_reason: str = ""

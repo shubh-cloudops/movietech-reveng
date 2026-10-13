@@ -32,6 +32,11 @@ GROUNDER_MODEL = os.getenv("MOVIETECH_GROUNDER_MODEL", "claude-haiku-5-5")
 COST_OPS_MODEL = os.getenv("MOVIETECH_COST_OPS_MODEL", "claude-haiku-5-5")
 REVIEW_EFFORT = os.getenv("MOVIETECH_REVIEW_EFFORT", "high")  # Grounder and Cost/Ops
 REVIEW_MAX_TOKENS = 16000
+CHAIRMAN_MODEL = os.getenv("MOVIETECH_CHAIRMAN_MODEL", "claude-opus-5-5")
+CHAIRMAN_EFFORT = os.getenv("MOVIETECH_CHAIRMAN_EFFORT", "high")
+CHAIRMAN_MAX_TOKENS = 16000
+REVISE_EFFORT = os.getenv("MOVIETECH_REVISE_EFFORT", "medium")  # authors fixing objections
+WARROOM_MAX_ROUNDS = 3
 # Server-side refusal fallback is offered on these models only (not on Haiku).
 SERVER_FALLBACK_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5"}
 
@@ -61,6 +66,7 @@ ARCHITECT_MAX_RUN_USD = float(os.getenv("MOVIETECH_ARCHITECT_MAX_USD", "2.00"))
 LEAD_DEV_MAX_RUN_USD = float(os.getenv("MOVIETECH_LEAD_DEV_MAX_USD", "2.00"))
 TEST_ENG_MAX_RUN_USD = float(os.getenv("MOVIETECH_TEST_ENG_MAX_USD", "2.00"))
 REVIEW_MAX_RUN_USD = float(os.getenv("MOVIETECH_REVIEW_MAX_USD", "1.50"))  # one whole round
+WARROOM_MAX_RUN_USD = float(os.getenv("MOVIETECH_WARROOM_MAX_USD", "5.00"))  # all 3 rounds
 
 # --- Grounder ---------------------------------------------------------------
 STALE_AFTER_DAYS = 730  # no release for 2 years counts as unmaintained

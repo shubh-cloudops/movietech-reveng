@@ -41,6 +41,14 @@ def main() -> None:
     p_review = sub.add_parser("review", help="War Room: Skeptic, Grounder and Cost/Ops review")
     p_review.add_argument("run_dir", type=Path, help="folder with plan/tests.json")
 
+    p_war = sub.add_parser("warroom", help="War Room: review, Chairman, revise, up to 3 rounds")
+    p_war.add_argument("run_dir", type=Path, help="folder with plan/tests.json")
+    p_war.add_argument("--rounds", type=int, default=3, help="round cap (default 3)")
+
+    p_ok = sub.add_parser("approve", help="final gate: approve the plan and write PLAN.md")
+    p_ok.add_argument("run_dir", type=Path)
+    p_ok.add_argument("--notes", default="", help="anything you want on record")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -139,6 +147,24 @@ def main() -> None:
         failed = gates(r)
         print("Gates: all pass." if not failed else f"Gates: {len(failed)} failing.")
         print(f"Read {args.run_dir / 'plan' / f'review_r{r.round}.md'}")
+    elif args.command == "warroom":
+        from movietech.chairman import load_ledger
+        from movietech.warroom import warroom
+
+        r, failed, stopped = warroom(args.run_dir, max_rounds=args.rounds)
+        counts = {}
+        for e in load_ledger(args.run_dir).values():
+            counts[e.status] = counts.get(e.status, 0) + 1
+        print(f"Round {r.round}. Objections: " + ", ".join(f"{n} {k}" for k, n in counts.items()))
+        for g in failed:
+            print(f"Gate failing: {g}")
+        print(stopped)
+        print(f"Read {args.run_dir / 'plan' / 'warroom.md'}")
+    elif args.command == "approve":
+        from movietech.warroom import approve
+
+        path = approve(args.run_dir, args.notes)
+        print(f"Approved. Wrote {path}")
     elif args.command == "costs":
         from movietech.costs import summarise
 

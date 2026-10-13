@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 8 of the build: everything up to the Test Engineer, plus the War Room's review round (Skeptic, Grounder, Cost/Ops Reviewer). The Chairman and the revise loop come next.
+**Status:** Step 9 of the build: the whole pipeline from film to an approved, reviewed plan. Next: Iron Man input, Docker, Terraform and the GitHub Issues export.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -25,6 +25,12 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
                        Skeptic (Gemini Pro)                         debate_log.jsonl
                        Grounder (Haiku + npm, PyPI, GitHub)
                        Cost/Ops Reviewer (Haiku)
+                                                             │
+                     Chairman (Claude Opus) rules on each   ◄┘──► plan/objections.json
+                     objection → authors revise → review       plan/history/v1, v2 ...
+                     again, up to 3 rounds                     plan/warroom.md
+                                                             │
+                     Final gate (you approve)               ◄┘──► plan/PLAN.md + approval.json
                                                                    costs.jsonl (every call)
 ```
 
@@ -39,6 +45,8 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Lead Developer | Breaks the design into milestones of tasks of a day or less, local first, each with files, dependencies and a "done when" result, plus a teardown. Code checks every component and must-have has a task and every dependency comes earlier | Yes (`claude-opus-5-5`) |
 | Test Engineer | A separate call writes Given/When/Then acceptance tests with exact run commands and the CI steps. Code checks every task and must-have is tested and the success measure is proved | Yes (`claude-opus-5-5`) |
 | War Room review | Three independent reviewers. The **Skeptic** runs on Gemini, a different model family from the Claude authors, so it doesn't share their blind spots; it checks the plan against your brief and the film. The **Grounder** has Haiku name every package, then plain code checks each on the live npm, PyPI and GitHub registries (exists, maintained, licence). The **Cost/Ops Reviewer** estimates the monthly bill and checks teardown, secrets and monitoring. Each must pass or fail every rubric item with a reason, not just say "looks good". Code then checks the hard gates: no open blockers, every dependency verified, every rubric item passed | Yes (`gemini-3.1-pro-preview`, `claude-haiku-5-5`) |
+| Chairman and revise loop | The Chairman rules on every objection: accept (and route it to the author who owns that part), reject (with the reason on record), or ask you. It never writes plan content, because a judge that also authors would approve its own work. Authors fix only what they were sent; then the reviewers re-check, and only the reviewer who raised an objection can close it. Stops when the gates pass, when nothing is left an author can fix, or after 3 rounds | Yes (`claude-opus-5-5`, plus the reviewers) |
+| Final gate | You approve. `PLAN.md` collects the debate result, architecture, tasks and tests in one file, and `approval.json` records any objections still open when you signed off | No |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -141,10 +149,25 @@ Expected result: `N tests: ...` by kind (unit, integration, end to end, manual),
 python -m movietech review C:\movietech\output\tos
 ```
 Expected result: counts of blocker, major and minor objections with their ids, `Grounding: N/M dependencies verified`, the estimated monthly cloud cost, the gates, then `Read ...\plan\review_r1.md`.
-- `Gates: N failing.` is normal on a first round: that's the War Room doing its job. The Chairman (next step of the build) will route each objection to the author who fixes it.
+- `Gates: N failing.` is normal on a first round: that's the War Room doing its job. Step 12 fixes them.
 - A grounding row with status `error` means a lookup failed (often GitHub's 60-requests-an-hour limit). Optional: set a GitHub token with no scopes as `GITHUB_TOKEN` to raise the limit to 5,000.
 
-**12. See where the money went (free)**
+**12. War Room debate (paid: about $1.50–$3.00, estimated; hard cap $5.00)**
+```powershell
+python -m movietech warroom C:\movietech\output\tos
+```
+Expected result: one `Estimated spend this call (...)` line per call, then `Round N. Objections: ...` (closed, rejected, open, ask_user), any `Gate failing:` lines, why it stopped, and `Read ...\plan\warroom.md`.
+- It picks up from the round-1 review of step 11 if you ran it, and resumes where it stopped if interrupted.
+- `Questions for you` in `warroom.md` are decisions only you can make. Answer them by editing your Vision Brief, then rerun from step 7.
+- `Worst case $X is over the $5.00 cap`: the debate stops before spending; raise `MOVIETECH_WARROOM_MAX_USD` only if you mean to.
+
+**13. Final gate: approve (free)**
+```powershell
+python -m movietech approve C:\movietech\output\tos --notes "Dry run"
+```
+Expected result: `Approved. Wrote ...\plan\PLAN.md`.
+
+**14. See where the money went (free)**
 ```powershell
 python -m movietech costs C:\movietech\output\tos
 ```
@@ -174,6 +197,8 @@ movietech/
   tester.py          Test Engineer agent and its coverage check
   review.py          War Room review round: Skeptic, Grounder, Cost/Ops, hard gates
   registries.py      Grounder lookups on npm, PyPI and GitHub (plain code, no model)
+  chairman.py        Chairman rulings and the objection ledger
+  warroom.py         the debate loop, author revisions and the final approval gate
   claude.py          one structured Claude call: budget pre-check, streaming, fallbacks
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
