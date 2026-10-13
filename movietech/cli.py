@@ -23,6 +23,12 @@ def main() -> None:
     p_cards = sub.add_parser("cards", help="Watcher Pass C: merge deep-look results into cards")
     p_cards.add_argument("run_dir", type=Path, help="folder with deep.jsonl")
 
+    p_gate = sub.add_parser("gate", help="human gate: pick cards and attach your Vision Briefs")
+    p_gate.add_argument("run_dir", type=Path, help="folder with cards.json")
+    p_gate.add_argument("--pick", nargs=2, action="append", required=True,
+                        metavar=("CARD_ID", "BRIEF_FILE"),
+                        help="a card id and its Vision Brief file; repeat for up to 3 cards")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -59,6 +65,17 @@ def main() -> None:
             print(f"Warning: {w}")
         print(f"{len(cards.cards)} cards, {len(cards.dropped)} dropped. "
               f"Read {args.run_dir / 'cards.md'}")
+    elif args.command == "gate":
+        from movietech.gate import BriefError, run_gate
+
+        try:
+            result = run_gate(args.run_dir, [(c, Path(b)) for c, b in args.pick])
+        except BriefError as e:
+            raise SystemExit(f"Not accepted:\n{e}") from None
+        for s in result.selections:
+            print(f"{s.card.card_id}  {s.card.name}  <-  {s.brief_file} "
+                  f"({len(s.brief.must_haves)} must-haves)")
+        print(f"Accepted. Wrote {args.run_dir / 'gate.json'}")
     elif args.command == "costs":
         from movietech.costs import summarise
 
