@@ -1,0 +1,7 @@
+# Official YouTube clips for the clips command. One clip per line:
+#   URL | title | where the clip starts in the film (optional, HH:MM:SS)
+# Use the studio's or the film's official channel only, and public videos only:
+# Gemini can't open private or unlisted videos.
+# Lines starting with # are ignored. Save your copy as C:\movietech\input\ironman_clips.txt
+#
+# https://www.youtube.com/watch?v=XXXXXXXXXXX | Suit flight test | 00:42:00

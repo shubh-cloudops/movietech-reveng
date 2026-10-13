@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 9 of the build: the whole pipeline from film to an approved, reviewed plan. Next: Iron Man input, Docker, Terraform and the GitHub Issues export.
+**Status:** Step 10 of the build: the whole pipeline from film to an approved, reviewed plan, from your own video file or from official YouTube clips plus your scene notes. Next: Docker, Terraform and the GitHub Issues export.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -39,6 +39,7 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Ingestor | Cuts the film into 20–90 s segments, saves 3 keyframes each, attaches subtitle lines | No |
 | Watcher Pass A | Asks a cheap vision model, for each segment: "does a software system act here?" | Yes (`gemini-3.8-flash`) |
 | Watcher Pass B | Sends a small video clip of each flagged segment to a Pro model, which lists timestamped observations (tagged observed / necessary / plausible / speculative) and the capabilities a real team could build | Yes (`gemini-3.1-pro-preview`) |
+| Clips and notes (instead of the three rows above) | For a film you don't own a copy of: Gemini watches each official YouTube clip straight from its URL (nothing is downloaded), and plain code reads your own scene notes. Both are written to `deep.jsonl`, so Pass C onwards runs unchanged | Clips: yes (`gemini-3.1-pro-preview`). Notes: no |
 | Watcher Pass C | Merges the deep-look notes into a short list of capability cards: behaviour, evidence, feasibility, real-world analogues. Every raw capability ends up in a card or in a "dropped" list with a reason | Yes (`claude-opus-5-5`) |
 | Human gate | You pick 1–3 cards and write a Vision Brief for each: who uses it, where it runs, must-haves, out of scope, how you'll know it works. The code checks every brief and lists all problems at once | No |
 | Architect | Designs components, data flow and one ADR per significant choice, serving every must-have and building nothing out of scope. Where the film and your brief disagree it asks you instead of choosing. Code then checks coverage | Yes (`claude-opus-5-5`) |
@@ -182,6 +183,35 @@ API keys are removed as described in the step 1 checklist.
 
 ---
 
+## Run it on a film you don't own (Iron Man)
+You never need the film file. Gemini watches official clips from YouTube, and you add notes on the scenes the clips don't show. Either source works alone.
+
+**1. Write your clip list and notes (free)**
+```powershell
+Copy-Item templates\clips-template.txt C:\movietech\input\ironman_clips.txt
+Copy-Item templates\scene-notes-template.md C:\movietech\input\ironman_notes.md
+notepad C:\movietech\input\ironman_clips.txt
+```
+Expected result: both files exist in `C:\movietech\input`, which is outside the repo, so your notes stay private.
+
+**2. Watch the clips and read your notes (paid, about $0.15 per 3-minute clip)**
+```powershell
+python -m movietech clips C:\movietech\output\ironman --clips C:\movietech\input\ironman_clips.txt --notes C:\movietech\input\ironman_notes.md
+```
+Expected result: one line per clip, then `N scenes from your notes; X of Y clips show software.`
+- `Y02 skipped, Gemini could not open ...`: the video is private, removed or blocked in your region. Replace the link and rerun; finished clips are not paid for twice.
+- `not a YouTube link`: only `youtube.com/watch?v=` and `youtu.be/` links are accepted.
+- `no filled-in scenes found`: every scene still has the `00:00:00` placeholder time.
+
+**3. Carry on from the cards step** with `C:\movietech\output\ironman` as the run folder: `cards`, `gate`, `architect`, `tasks`, `tests`, `warroom`, `approve`.
+
+**Teardown**
+```powershell
+Remove-Item -Recurse -Force C:\movietech\output\ironman
+```
+
+---
+
 ## Project layout
 ```
 movietech/
@@ -190,6 +220,7 @@ movietech/
   ingest.py          Stage 0: Ingestor
   watcher_triage.py  Watcher Pass A
   watcher_deep.py    Watcher Pass B
+  watcher_clips.py   clips and notes input, for a film you don't own
   watcher_cards.py   Watcher Pass C
   gate.py            human gate: Vision Brief parser and card picks
   architect.py       Architect agent and its coverage check
@@ -203,9 +234,9 @@ movietech/
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
-templates/           Vision Brief template you copy and fill in
+templates/           Vision Brief, scene notes and clip list templates
 tests/               pytest; Gemini and Claude are faked so CI needs no keys
 ```
 
 ## Copyright
-Only process films you have the rights to. The public demo uses *Tears of Steel* (© Blender Foundation, CC BY 3.0, mango.blender.org). `input/` and `output/` are git-ignored, so frames from copyrighted films never reach this repo.
+Only process films you have the rights to. The public demo uses *Tears of Steel* (© Blender Foundation, CC BY 3.0, mango.blender.org). `input/` and `output/` are git-ignored, so frames from copyrighted films never reach this repo. For a film you don't own, the clips command only accepts YouTube links, so Gemini watches official clips where they are published and nothing is downloaded.

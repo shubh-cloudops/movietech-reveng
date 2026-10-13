@@ -28,12 +28,14 @@ Rules:
 - Judge feasibility honestly against today's technology and say why in one sentence.
 - Every raw capability name in the input must appear exactly once: in one card's merged_from,
   or in dropped with a reason (for example: plot device, not software; duplicate wording).
-- Order cards from most to least buildable, then by strength of evidence."""
+- Order cards from most to least buildable, then by strength of evidence.
+- Segments from "your notes" (ids N01, N02, ...) are the user's own first-hand scene notes and
+  name no raw capabilities. Cite them as evidence, and let them add cards the video missed."""
 
 
 def _notes(results: list[DeepLookResult]) -> str:
     """The deep-look results as compact JSON lines: only what the cards need."""
-    keep = {"segment_id", "start", "end", "summary", "observations", "capabilities"}
+    keep = {"segment_id", "start", "end", "model", "summary", "observations", "capabilities"}
     return "\n".join(json.dumps(r.model_dump(include=keep)) for r in results)
 
 

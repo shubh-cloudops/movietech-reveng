@@ -20,6 +20,12 @@ def main() -> None:
     p_deep.add_argument("run_dir", type=Path, help="folder created by ingest and triage")
     p_deep.add_argument("--video", type=Path, required=True, help="the same video given to ingest")
 
+    p_clips = sub.add_parser("clips", help="instead of ingest/triage/deep: watch YouTube clips "
+                                           "and read your scene notes")
+    p_clips.add_argument("run_dir", type=Path, help="run folder (created if missing)")
+    p_clips.add_argument("--clips", type=Path, help="text file, one 'URL | title' per line")
+    p_clips.add_argument("--notes", type=Path, help="your scene notes (ironman_notes.md)")
+
     p_cards = sub.add_parser("cards", help="Watcher Pass C: merge deep-look results into cards")
     p_cards.add_argument("run_dir", type=Path, help="folder with deep.jsonl")
 
@@ -75,6 +81,17 @@ def main() -> None:
         caps = sum(len(r.capabilities) for r in real)
         print(f"{len(real)} of {len(results)} flagged segments show software; "
               f"{caps} capabilities named. Wrote {args.run_dir / 'deep.jsonl'}")
+    elif args.command == "clips":
+        from movietech.watcher_clips import watch_clips
+
+        results, warnings = watch_clips(args.run_dir, args.clips, args.notes)
+        for w in warnings:
+            print(f"Warning: {w}")
+        notes = sum(1 for r in results if r.segment_id.startswith("N"))
+        clips = [r for r in results if r.segment_id.startswith("Y")]
+        real = sum(1 for r in clips if r.shows_software)
+        print(f"{notes} scenes from your notes; {real} of {len(clips)} clips show software. "
+              f"Wrote {args.run_dir / 'deep.jsonl'}")
     elif args.command == "cards":
         from movietech.watcher_cards import make_cards
 
