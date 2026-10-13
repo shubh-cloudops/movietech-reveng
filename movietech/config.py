@@ -24,6 +24,16 @@ LEAD_DEV_MAX_TOKENS = 32000
 TEST_ENG_MODEL = os.getenv("MOVIETECH_TEST_ENG_MODEL", "claude-opus-5-5")
 TEST_ENG_EFFORT = os.getenv("MOVIETECH_TEST_ENG_EFFORT", "high")
 TEST_ENG_MAX_TOKENS = 32000
+# War Room reviewers. The Skeptic is a different model family from the authors on purpose.
+SKEPTIC_MODEL = os.getenv("MOVIETECH_SKEPTIC_MODEL", "gemini-3.1-pro-preview")
+SKEPTIC_THINKING = os.getenv("MOVIETECH_SKEPTIC_THINKING", "high")
+SKEPTIC_MAX_TOKENS = 32768
+GROUNDER_MODEL = os.getenv("MOVIETECH_GROUNDER_MODEL", "claude-haiku-5-5")
+COST_OPS_MODEL = os.getenv("MOVIETECH_COST_OPS_MODEL", "claude-haiku-5-5")
+REVIEW_EFFORT = os.getenv("MOVIETECH_REVIEW_EFFORT", "high")  # Grounder and Cost/Ops
+REVIEW_MAX_TOKENS = 16000
+# Server-side refusal fallback is offered on these models only (not on Haiku).
+SERVER_FALLBACK_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5"}
 
 # USD per 1M tokens: (input, output). Thinking tokens bill as output.
 # Source: ai.google.dev/gemini-api/docs/pricing, checked 2026-10-12.
@@ -34,7 +44,7 @@ PRICES_USD_PER_M = {
     # Source: platform.claude.com pricing, checked 2026-10-13.
     "claude-opus-5-5": (4.00, 20.00),
     "claude-sonnet-5-5": (2.00, 10.00),
-    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-haiku-5-5": (0.10, 0.50),  # prompts up to 100K tokens; ours stay well under
 }
 # Used when a response comes from a model not listed above (e.g. a safety fallback):
 # the most expensive current Claude tier, so the estimate errs high.
@@ -50,6 +60,12 @@ CARDS_MAX_RUN_USD = float(os.getenv("MOVIETECH_CARDS_MAX_USD", "2.00"))
 ARCHITECT_MAX_RUN_USD = float(os.getenv("MOVIETECH_ARCHITECT_MAX_USD", "2.00"))
 LEAD_DEV_MAX_RUN_USD = float(os.getenv("MOVIETECH_LEAD_DEV_MAX_USD", "2.00"))
 TEST_ENG_MAX_RUN_USD = float(os.getenv("MOVIETECH_TEST_ENG_MAX_USD", "2.00"))
+REVIEW_MAX_RUN_USD = float(os.getenv("MOVIETECH_REVIEW_MAX_USD", "1.50"))  # one whole round
+
+# --- Grounder ---------------------------------------------------------------
+STALE_AFTER_DAYS = 730  # no release for 2 years counts as unmaintained
+OK_LICENSES = {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD",
+               "MPL-2.0", "Unlicense", "PSF-2.0", "Python-2.0", "BlueOak-1.0.0"}
 
 # --- Ingest -----------------------------------------------------------------
 SEGMENT_MIN_S = 20.0  # merge short shots until a segment is at least this long
