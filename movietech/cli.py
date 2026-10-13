@@ -29,6 +29,9 @@ def main() -> None:
                         metavar=("CARD_ID", "BRIEF_FILE"),
                         help="a card id and its Vision Brief file; repeat for up to 3 cards")
 
+    p_arch = sub.add_parser("architect", help="design a system for the cards you picked")
+    p_arch.add_argument("run_dir", type=Path, help="folder with gate.json")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -76,6 +79,17 @@ def main() -> None:
             print(f"{s.card.card_id}  {s.card.name}  <-  {s.brief_file} "
                   f"({len(s.brief.must_haves)} must-haves)")
         print(f"Accepted. Wrote {args.run_dir / 'gate.json'}")
+    elif args.command == "architect":
+        from movietech.architect import architect
+
+        arch, problems = architect(args.run_dir)
+        for c in arch.components:
+            print(f"{c.component_id}  {c.name:<32} {c.technology}  [{c.cloud_service}]")
+        print(f"{len(arch.adrs)} ADRs, {len(arch.risks)} risks, "
+              f"{len(arch.conflicts)} questions for you.")
+        for p in problems:
+            print(f"Problem: {p}")
+        print(f"Read {args.run_dir / 'plan' / 'architecture.md'}")
     elif args.command == "costs":
         from movietech.costs import summarise
 
