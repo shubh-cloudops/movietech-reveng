@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 5 of the build: the Ingestor, Watcher Passes A–C, and the human gate.
+**Status:** Step 6 of the build: the Ingestor, Watcher Passes A–C, the human gate and the Architect.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -14,6 +14,8 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
                      Watcher Pass C (Claude Opus)           ◄┘──► cards.json + cards.md
                                                              │
                      Human gate (you: 1-3 cards + Vision Briefs) ◄┘──► gate.json
+                                                             │
+                     Architect (Claude Opus)                ◄┘──► plan/architecture.json + .md
                                                                    costs.jsonl (every call)
 ```
 
@@ -24,6 +26,7 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Watcher Pass B | Sends a small video clip of each flagged segment to a Pro model, which lists timestamped observations (tagged observed / necessary / plausible / speculative) and the capabilities a real team could build | Yes (`gemini-3.1-pro-preview`) |
 | Watcher Pass C | Merges the deep-look notes into a short list of capability cards: behaviour, evidence, feasibility, real-world analogues. Every raw capability ends up in a card or in a "dropped" list with a reason | Yes (`claude-opus-5-5`) |
 | Human gate | You pick 1–3 cards and write a Vision Brief for each: who uses it, where it runs, must-haves, out of scope, how you'll know it works. The code checks every brief and lists all problems at once | No |
+| Architect | Designs components, data flow and one ADR per significant choice, serving every must-have and building nothing out of scope. Where the film and your brief disagree it asks you instead of choosing. Code then checks coverage | Yes (`claude-opus-5-5`) |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -98,7 +101,15 @@ Expected result: `C06  Live Spatial Speech Captions  <-  vision_captions.md (3 m
 - `Not accepted:` lists every problem in your brief; fix them and rerun.
 - Keep the headings exactly as in the template. Everything after the `---` line (the made-up example) is ignored.
 
-**8. See where the money went (free)**
+**8. Architect (paid: about $0.15–$0.40, estimated; never more than about $0.65)**
+```powershell
+python -m movietech architect C:\movietech\output\tos
+```
+Expected result: one line per component (`A1  Web client  React  [none]`), the number of ADRs, risks and questions for you, then `Read ...\plan\architecture.md`.
+- `Problem:` lines come from the code check (for example a must-have no component serves). The War Room will make the Architect fix them; for now, tell us.
+- Questions for you appear at the top of `architecture.md`.
+
+**9. See where the money went (free)**
 ```powershell
 python -m movietech costs C:\movietech\output\tos
 ```
@@ -123,6 +134,8 @@ movietech/
   watcher_deep.py    Watcher Pass B
   watcher_cards.py   Watcher Pass C
   gate.py            human gate: Vision Brief parser and card picks
+  architect.py       Architect agent and its coverage check
+  claude.py          one structured Claude call: budget pre-check, streaming, fallbacks
 templates/           Vision Brief template you copy and fill in
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls

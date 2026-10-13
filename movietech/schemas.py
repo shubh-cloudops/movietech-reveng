@@ -150,3 +150,70 @@ class GateResult(BaseModel):
     """Output of the human gate: what the Architect will plan for."""
 
     selections: list[GateSelection] = Field(min_length=1, max_length=3)
+
+
+class Component(BaseModel):
+    """One part of the system the Architect proposes."""
+
+    component_id: str = Field(description="A1, A2, ...")
+    name: str
+    responsibility: str = Field(description="what this part does, in one or two sentences")
+    technology: str = Field(description="the proposed language, library or service; the "
+                                        "Grounder verifies it later")
+    cloud_service: str = Field(description="managed cloud service it runs on, or 'none' "
+                                           "if it runs on the user's device")
+    serves_cards: list[str] = Field(description="card ids this component helps deliver")
+    serves_must_haves: list[str] = Field(description="must-haves copied word for word from "
+                                                     "the Vision Brief")
+
+
+class DataFlow(BaseModel):
+    """Data moving from one component to another."""
+
+    source: str = Field(description="component_id, or 'user'")
+    target: str = Field(description="component_id, or 'user'")
+    data: str = Field(description="what moves, e.g. 'audio chunks, 16 kHz PCM'")
+    protocol: str = Field(description="e.g. HTTPS, WebSocket, SQS message, function call")
+
+
+class AdrOption(BaseModel):
+    option: str
+    pros: list[str]
+    cons: list[str]
+
+
+class Adr(BaseModel):
+    """Architecture Decision Record: one choice, the options weighed, and why."""
+
+    adr_id: str = Field(description="ADR-001, ADR-002, ...")
+    title: str
+    context: str
+    options: list[AdrOption] = Field(description="at least two real options")
+    decision: str
+    consequences: str
+
+
+class Conflict(BaseModel):
+    """Where the film's evidence and the Vision Brief disagree. Only the user resolves it."""
+
+    film_shows: str
+    brief_says: str
+    question_for_user: str
+
+
+class Risk(BaseModel):
+    risk: str
+    likelihood: Literal["low", "medium", "high"]
+    mitigation: str
+
+
+class Architecture(BaseModel):
+    """Output of the Architect."""
+
+    summary: str = Field(description="the whole design in 3-5 sentences")
+    components: list[Component]
+    data_flows: list[DataFlow]
+    adrs: list[Adr]
+    conflicts: list[Conflict] = Field(description="empty if the film and the brief agree")
+    assumptions: list[str]
+    risks: list[Risk]

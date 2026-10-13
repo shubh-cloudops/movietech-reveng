@@ -8,10 +8,8 @@ Reads <run_dir>/deep.jsonl and writes <run_dir>/cards.json (for the next agents)
 import json
 from pathlib import Path
 
-import anthropic
-
 from movietech import config
-from movietech.costs import BudgetExceeded, CostTracker
+from movietech.claude import structured_call
 from movietech.schemas import CapabilityCards, DeepLookResult
 
 SYSTEM = """You are the last stage of a film-watching pipeline. Earlier stages watched a film
@@ -95,43 +93,14 @@ def make_cards(run_dir: Path, client=None, model: str = config.CARDS_MODEL,
         raise ValueError("No segment in deep.jsonl shows software, so there is nothing to card.")
     notes = _notes(results)
 
-    # One call, so check the worst case before paying: ~3.5 characters per token,
-    # plus a full max_tokens answer.
-    in_price, out_price = config.PRICES_USD_PER_M[model]
-    worst = ((len(SYSTEM) + len(notes)) / 3.5 * in_price
-             + config.CARDS_MAX_TOKENS * out_price) / 1_000_000
-    if worst > max_usd:
-        raise BudgetExceeded(f"Worst case ${worst:.2f} is over the ${max_usd:.2f} cap. "
-                             "Raise MOVIETECH_CARDS_MAX_USD to run.")
-
-    client = client or anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
-    tracker = CostTracker(model, max_usd, stage="cards", ledger=run_dir / "costs.jsonl")
-    # Streaming keeps a long answer from hitting the HTTP timeout. "default" fallbacks let the
-    # API re-run the request on another model if a safety classifier declines it.
-    with client.beta.messages.stream(
-        model=model,
-        max_tokens=config.CARDS_MAX_TOKENS,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": f"Deep-look notes, one segment per line:\n{notes}"}],
-        output_config={"effort": config.CARDS_EFFORT},
-        output_format=CapabilityCards,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-    ) as stream:
-        message = stream.get_final_message()
-    tracker.add(message.usage, item="all", model=message.model)
-
-    if message.stop_reason == "refusal":
-        raise RuntimeError("The model declined to answer. Check deep.jsonl for unusual content.")
-    if message.stop_reason == "max_tokens":
-        raise RuntimeError("The answer hit the token limit and was cut off. "
-                           "Set MOVIETECH_CARDS_EFFORT=medium and rerun.")
-    cards = message.parsed_output
-    if cards is None:
-        raise RuntimeError("The model returned no valid cards. Rerun to retry.")
-
+    cards = structured_call(
+        client=client, model=model, system=SYSTEM,
+        user=f"Deep-look notes, one segment per line:\n{notes}",
+        output_format=CapabilityCards, effort=config.CARDS_EFFORT,
+        max_tokens=config.CARDS_MAX_TOKENS, max_usd=max_usd, stage="cards", run_dir=run_dir,
+        cap_env="MOVIETECH_CARDS_MAX_USD",
+    )
     warnings = _check(cards, results)
     (run_dir / "cards.json").write_text(cards.model_dump_json(indent=2), encoding="utf-8")
     (run_dir / "cards.md").write_text(to_markdown(cards), encoding="utf-8")
-    print(f"Estimated spend this run: ${tracker.spent_usd:.4f}")
     return cards, warnings
