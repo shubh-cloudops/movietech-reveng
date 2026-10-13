@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 6 of the build: the Ingestor, Watcher Passes A–C, the human gate and the Architect.
+**Status:** Step 7 of the build: the Ingestor, Watcher Passes A–C, the human gate, the Architect, the Lead Developer and the Test Engineer.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -16,6 +16,10 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
                      Human gate (you: 1-3 cards + Vision Briefs) ◄┘──► gate.json
                                                              │
                      Architect (Claude Opus)                ◄┘──► plan/architecture.json + .md
+                                                             │
+                     Lead Developer (Claude Opus)           ◄┘──► plan/tasks.json + .md
+                                                             │
+                     Test Engineer (Claude Opus)            ◄┘──► plan/tests.json + .md
                                                                    costs.jsonl (every call)
 ```
 
@@ -27,6 +31,8 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Watcher Pass C | Merges the deep-look notes into a short list of capability cards: behaviour, evidence, feasibility, real-world analogues. Every raw capability ends up in a card or in a "dropped" list with a reason | Yes (`claude-opus-5-5`) |
 | Human gate | You pick 1–3 cards and write a Vision Brief for each: who uses it, where it runs, must-haves, out of scope, how you'll know it works. The code checks every brief and lists all problems at once | No |
 | Architect | Designs components, data flow and one ADR per significant choice, serving every must-have and building nothing out of scope. Where the film and your brief disagree it asks you instead of choosing. Code then checks coverage | Yes (`claude-opus-5-5`) |
+| Lead Developer | Breaks the design into milestones of tasks of a day or less, local first, each with files, dependencies and a "done when" result, plus a teardown. Code checks every component and must-have has a task and every dependency comes earlier | Yes (`claude-opus-5-5`) |
+| Test Engineer | A separate call writes Given/When/Then acceptance tests with exact run commands and the CI steps. Code checks every task and must-have is tested and the success measure is proved | Yes (`claude-opus-5-5`) |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
 
@@ -109,7 +115,22 @@ Expected result: one line per component (`A1  Web client  React  [none]`), the n
 - `Problem:` lines come from the code check (for example a must-have no component serves). The War Room will make the Architect fix them; for now, tell us.
 - Questions for you appear at the top of `architecture.md`.
 
-**9. See where the money went (free)**
+**9. Lead Developer (paid: about $0.20–$0.45, estimated; never more than about $0.75)**
+```powershell
+python -m movietech tasks C:\movietech\output\tos
+```
+Expected result: one line per milestone (`M1  Local captions: 4 tasks (T01, T02, T03, T04)`), any `Paid:` lines, then `Read ...\plan\tasks.md`.
+- `Run architect first.` means step 8 hasn't produced `plan\architecture.json` in this run folder.
+- `Problem:` lines come from the code check; send them to us.
+
+**10. Test Engineer (paid: about $0.20–$0.45, estimated; never more than about $0.75)**
+```powershell
+python -m movietech tests C:\movietech\output\tos
+```
+Expected result: `N tests: ...` by kind (unit, integration, end to end, manual), then `Read ...\plan\tests.md`.
+- `Run tasks first.` means step 9 hasn't run in this run folder.
+
+**11. See where the money went (free)**
 ```powershell
 python -m movietech costs C:\movietech\output\tos
 ```
@@ -135,12 +156,14 @@ movietech/
   watcher_cards.py   Watcher Pass C
   gate.py            human gate: Vision Brief parser and card picks
   architect.py       Architect agent and its coverage check
+  lead_dev.py        Lead Developer agent and its plan check
+  tester.py          Test Engineer agent and its coverage check
   claude.py          one structured Claude call: budget pre-check, streaming, fallbacks
-templates/           Vision Brief template you copy and fill in
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
-tests/               pytest; Gemini is faked so CI needs no keys
+templates/           Vision Brief template you copy and fill in
+tests/               pytest; Gemini and Claude are faked so CI needs no keys
 ```
 
 ## Copyright
