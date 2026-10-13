@@ -5,6 +5,9 @@
 - Grounder (Haiku names the dependencies; code checks them on npm, PyPI and GitHub).
 - Cost/Ops Reviewer (Haiku): monthly cost, free-tier fit, teardown, secrets, observability.
 
+From round 2 on, each reviewer also re-checks the objections it raised earlier that the
+Chairman accepted: only the reviewer who raised an objection can close it.
+
 Reads gate.json and plan/architecture.json, tasks.json, tests.json. Writes
 plan/review_r<N>.json and review_r<N>.md, and appends every objection to debate_log.jsonl.
 """
@@ -27,6 +30,7 @@ from movietech.schemas import (
     Review,
     ReviewRound,
     RubricCheck,
+    Verdict,
 )
 
 SKEPTIC_RUBRIC = ["vision fit: every must-have", "vision fit: nothing out of scope",
@@ -65,6 +69,13 @@ name you are unsure of; give your best exact name and the registry check will ca
 Put managed cloud services (e.g. Amazon S3), browser APIs (e.g. Web Audio API) and models
 hosted on a model hub in not_checkable."""
 
+RECHECK = """
+
+EARLIER OBJECTIONS YOU RAISED. The authors have revised the plan since. For each one, return a
+verdict: closed (true) only if the plan above now fixes it, with a one-line reason. Do not raise
+these again as new objections.
+{objections}"""
+
 GROUNDING_SEVERITY = {"missing": "blocker", "archived": "blocker", "stale": "major",
                       "license": "major", "error": "minor"}
 
@@ -89,9 +100,15 @@ def plan_text(gate: GateResult, arch, tasks, tests) -> str:
             f"BUILD PLAN {tasks.model_dump_json()}\n\nACCEPTANCE TESTS {tests.model_dump_json()}")
 
 
-def _number(drafts, reviewer: str, prefix: str) -> list[Objection]:
-    return [Objection(objection_id=f"{prefix}{i:02d}", reviewer=reviewer, **d.model_dump())
+def _number(drafts: list[dict], reviewer: str, prefix: str, rnd: int) -> list[Objection]:
+    """Ids carry the round, so they stay unique across rounds: SK101 is round 1's first."""
+    return [Objection(objection_id=f"{prefix}{rnd}{i:02d}", reviewer=reviewer, **d)
             for i, d in enumerate(drafts, 1)]
+
+
+def _recheck(open_before: list[Objection], reviewer: str) -> str:
+    mine = [o.model_dump() for o in open_before if o.reviewer == reviewer]
+    return RECHECK.format(objections=json.dumps(mine)) if mine else ""
 
 
 def missing_checks(checks: list[RubricCheck], rubric: list[str]) -> list[str]:
@@ -103,7 +120,7 @@ def missing_checks(checks: list[RubricCheck], rubric: list[str]) -> list[str]:
 def gates(r: ReviewRound) -> list[str]:
     """Hard gates, checked by code. The plan passes the round only when this list is empty."""
     failed = []
-    blockers = [o.objection_id for o in r.objections if o.severity == "blocker"]
+    blockers = [o.objection_id for o in r.carried + r.objections if o.severity == "blocker"]
     if blockers:
         failed.append(f"{len(blockers)} open blockers: {', '.join(blockers)}")
     bad = [g.name for g in r.grounding if g.status != "ok"]
@@ -124,6 +141,12 @@ def to_markdown(r: ReviewRound) -> str:
     for o in sorted(r.objections, key=lambda o: order[o.severity]):
         lines.append(f"| {o.objection_id} | {o.severity} | {o.section} | {o.issue} "
                      f"*Evidence:* {o.evidence} | {o.proposed_fix} |")
+    if r.verdicts or r.carried:
+        lines += ["", "## Earlier objections, re-checked by the reviewer who raised them", ""]
+        lines += [f"- {v.objection_id}: {'closed' if v.closed else 'still open'}. {v.reason}"
+                  for v in r.verdicts]
+        lines += [f"- {o.objection_id} ({o.severity}) still open: {o.issue}" for o in r.carried
+                  if o.objection_id not in {v.objection_id for v in r.verdicts}]
     lines += ["", "## Rubric", ""]
     for reviewer, checks in r.checks.items():
         lines += [f"- **{reviewer}** {'PASS' if c.passed else 'FAIL'} {c.item}: {c.reason}"
@@ -145,8 +168,10 @@ def _spent(run_dir: Path) -> float:
 
 
 def review(run_dir: Path, claude=None, gemini_client=None, fetch=None,
-           max_usd: float = config.REVIEW_MAX_RUN_USD) -> tuple[ReviewRound, list[str]]:
-    """Run one review round. Returns the round and any reviewer that skipped rubric items."""
+           max_usd: float = config.REVIEW_MAX_RUN_USD,
+           open_before: list[Objection] = ()) -> tuple[ReviewRound, list[str]]:
+    """Run one review round. `open_before` are earlier accepted objections still open; their
+    raisers re-check them. Returns the round and any reviewer that skipped rubric items."""
     gate, arch, tasks, tests = _load(run_dir)
     plan = plan_text(gate, arch, tasks, tests)
     plan_dir = run_dir / "plan"
@@ -162,6 +187,11 @@ def review(run_dir: Path, claude=None, gemini_client=None, fetch=None,
         max_usd=left(), stage="review_grounder", run_dir=run_dir,
         cap_env="MOVIETECH_REVIEW_MAX_USD")
     lookups = [ground(d) if fetch is None else ground(d, fetch=fetch) for d in deps.dependencies]
+    flagged = {g.name for g in lookups if g.status != "ok"}
+    verdicts = [Verdict(objection_id=o.objection_id,
+                        closed=not any(f" {n}:" in o.issue for n in flagged),
+                        reason="registry re-check")
+                for o in open_before if o.reviewer == "grounder"]
     grounder_drafts = [
         {"section": "architecture", "severity": GROUNDING_SEVERITY[g.status],
          "issue": f"{g.ecosystem} package {g.name}: {g.note}",
@@ -173,22 +203,28 @@ def review(run_dir: Path, claude=None, gemini_client=None, fetch=None,
 
     skeptic = gemini.structured_call(
         client=gemini_client, model=config.SKEPTIC_MODEL,
-        system=SKEPTIC.format(rubric="\n".join(f"- {i}" for i in SKEPTIC_RUBRIC)), user=plan,
+        system=SKEPTIC.format(rubric="\n".join(f"- {i}" for i in SKEPTIC_RUBRIC)),
+        user=plan + _recheck(open_before, "skeptic"),
         schema=Review, thinking=config.SKEPTIC_THINKING, max_tokens=config.SKEPTIC_MAX_TOKENS,
         max_usd=left(), stage="review_skeptic", run_dir=run_dir,
         cap_env="MOVIETECH_REVIEW_MAX_USD")
     cost = structured_call(
         client=claude, model=config.COST_OPS_MODEL,
-        system=COST_OPS.format(rubric="\n".join(f"- {i}" for i in COST_OPS_RUBRIC)), user=plan,
+        system=COST_OPS.format(rubric="\n".join(f"- {i}" for i in COST_OPS_RUBRIC)),
+        user=plan + _recheck(open_before, "cost_ops"),
         output_format=CostReview, effort=config.REVIEW_EFFORT,
         max_tokens=config.REVIEW_MAX_TOKENS, max_usd=left(), stage="review_cost_ops",
         run_dir=run_dir, cap_env="MOVIETECH_REVIEW_MAX_USD")
 
-    objections = (_number(skeptic.objections, "skeptic", "SK")
-                  + [Objection(objection_id=f"GR{i:02d}", reviewer="grounder", **d)
-                     for i, d in enumerate(grounder_drafts, 1)]
-                  + _number(cost.objections, "cost_ops", "CO"))
-    result = ReviewRound(round=rnd, objections=objections,
+    objections = (_number([d.model_dump() for d in skeptic.objections], "skeptic", "SK", rnd)
+                  + _number(grounder_drafts, "grounder", "GR", rnd)
+                  + _number([d.model_dump() for d in cost.objections], "cost_ops", "CO", rnd))
+    raiser = {o.objection_id: o.reviewer for o in open_before}  # only the raiser can close
+    verdicts += [v for v in skeptic.verdicts if raiser.get(v.objection_id) == "skeptic"]
+    verdicts += [v for v in cost.verdicts if raiser.get(v.objection_id) == "cost_ops"]
+    closed = {v.objection_id for v in verdicts if v.closed}
+    result = ReviewRound(round=rnd, objections=objections, verdicts=verdicts,
+                         carried=[o for o in open_before if o.objection_id not in closed],
                          checks={"skeptic": skeptic.checks, "cost_ops": cost.checks},
                          grounding=lookups, not_checkable=deps.not_checkable,
                          monthly_cost_usd=cost.monthly_cost_usd,
@@ -202,6 +238,9 @@ def review(run_dir: Path, claude=None, gemini_client=None, fetch=None,
                                                   encoding="utf-8")
     (plan_dir / f"review_r{rnd}.md").write_text(to_markdown(result), encoding="utf-8")
     with (run_dir / "debate_log.jsonl").open("a", encoding="utf-8") as f:
+        for v in verdicts:
+            event = "closed" if v.closed else "still_open"
+            f.write(json.dumps({"round": rnd, "event": event, **v.model_dump()}) + "\n")
         for o in objections:
             f.write(json.dumps({"round": rnd, "event": "raised", **o.model_dump()}) + "\n")
     return result, warnings

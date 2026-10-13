@@ -103,7 +103,7 @@ def run(run_dir, skeptic=SKEPTIC, **kw):
 def test_round_collects_all_three_reviewers(run_dir):
     r, warnings, claude, gem = run(run_dir)
     assert warnings == []
-    assert [o.objection_id for o in r.objections] == ["SK01", "GR01"]
+    assert [o.objection_id for o in r.objections] == ["SK101", "GR101"]
     gr = r.objections[1]
     assert gr.severity == "blocker" and "made-up-pkg" in gr.issue  # 404 on npm
     assert r.grounding[0].status == "ok" and r.grounding[0].latest_version == "19.2.0"
@@ -119,9 +119,9 @@ def test_round_collects_all_three_reviewers(run_dir):
 def test_files_and_debate_log(run_dir):
     run(run_dir)
     md = (run_dir / "plan" / "review_r1.md").read_text()
-    assert "FAIL: 1 open blockers: GR01" in md and "made-up-pkg" in md
+    assert "FAIL: 1 open blockers: GR101" in md and "made-up-pkg" in md
     log = [json.loads(line) for line in (run_dir / "debate_log.jsonl").read_text().splitlines()]
-    assert [e["objection_id"] for e in log] == ["SK01", "GR01"]
+    assert [e["objection_id"] for e in log] == ["SK101", "GR101"]
     assert all(e["round"] == 1 and e["event"] == "raised" for e in log)
     r2, *_ = run(run_dir)
     assert r2.round == 2 and (run_dir / "plan" / "review_r2.json").exists()
