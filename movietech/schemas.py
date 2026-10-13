@@ -217,3 +217,64 @@ class Architecture(BaseModel):
     conflicts: list[Conflict] = Field(description="empty if the film and the brief agree")
     assumptions: list[str]
     risks: list[Risk]
+
+
+class Task(BaseModel):
+    """One unit of work a junior engineer can finish and verify in a day or less."""
+
+    task_id: str = Field(description="T01, T02, ...")
+    title: str
+    description: str = Field(description="what to build or set up, in 2-4 sentences")
+    component_ids: list[str] = Field(description="architecture component ids this task builds; "
+                                                 "empty only for project setup tasks")
+    must_haves: list[str] = Field(description="must-haves this task delivers, copied word for "
+                                              "word from the Vision Brief")
+    depends_on: list[str] = Field(description="task ids that must be done first")
+    files: list[str] = Field(description="repo paths this task creates or changes")
+    done_when: str = Field(description="one observable result that proves the task is done")
+    size: Literal["S", "M", "L"] = Field(description="S: under 2 h, M: 2-4 h, L: 4-8 h")
+    paid_resource: str = Field(description="paid cloud resource this task creates and its "
+                                           "estimated monthly cost, or 'none'")
+
+
+class Milestone(BaseModel):
+    milestone_id: str = Field(description="M1, M2, ...")
+    title: str
+    goal: str = Field(description="what works at the end of this milestone, in one sentence")
+    tasks: list[Task]
+
+
+class BuildPlan(BaseModel):
+    """Output of the Lead Developer."""
+
+    summary: str = Field(description="the build order and why, in 3-5 sentences")
+    repo_layout: list[str] = Field(description="top-level folders and key files, one per line "
+                                               "with a short purpose")
+    milestones: list[Milestone]
+    teardown: list[str] = Field(description="ordered steps that remove every cloud resource "
+                                            "the plan creates")
+
+
+class AcceptanceTest(BaseModel):
+    """One test that proves a task or must-have works."""
+
+    test_id: str = Field(description="AT01, AT02, ...")
+    task_ids: list[str] = Field(description="tasks this test verifies")
+    must_haves: list[str] = Field(description="must-haves it proves, copied word for word")
+    checks_success_measure: bool = Field(description="true if it proves the brief's "
+                                                     "'how I'll know it works'")
+    kind: Literal["unit", "integration", "end_to_end", "manual"]
+    given: str
+    when: str
+    then: str = Field(description="a measurable result, with a number where one fits")
+    how_to_run: str = Field(description="exact command, or numbered manual steps")
+    tool: str = Field(description="test tool, e.g. Vitest, Playwright, pytest, manual")
+
+
+class AcceptancePlan(BaseModel):
+    """Output of the Test Engineer."""
+
+    strategy: str = Field(description="what is tested at which level and why, in 3-5 sentences")
+    tests: list[AcceptanceTest]
+    ci_steps: list[str] = Field(description="ordered GitHub Actions steps that run the "
+                                            "automated tests")

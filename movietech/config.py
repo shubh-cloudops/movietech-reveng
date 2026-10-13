@@ -18,6 +18,12 @@ CARDS_MAX_TOKENS = 32000  # hard ceiling on one Pass C answer: at most $0.64 of 
 ARCHITECT_MODEL = os.getenv("MOVIETECH_ARCHITECT_MODEL", "claude-opus-5-5")
 ARCHITECT_EFFORT = os.getenv("MOVIETECH_ARCHITECT_EFFORT", "high")
 ARCHITECT_MAX_TOKENS = 32000
+LEAD_DEV_MODEL = os.getenv("MOVIETECH_LEAD_DEV_MODEL", "claude-opus-5-5")
+LEAD_DEV_EFFORT = os.getenv("MOVIETECH_LEAD_DEV_EFFORT", "high")
+LEAD_DEV_MAX_TOKENS = 32000
+TEST_ENG_MODEL = os.getenv("MOVIETECH_TEST_ENG_MODEL", "claude-opus-5-5")
+TEST_ENG_EFFORT = os.getenv("MOVIETECH_TEST_ENG_EFFORT", "high")
+TEST_ENG_MAX_TOKENS = 32000
 
 # USD per 1M tokens: (input, output). Thinking tokens bill as output.
 # Source: ai.google.dev/gemini-api/docs/pricing, checked 2026-10-12.
@@ -42,6 +48,8 @@ MAX_RUN_USD = float(os.getenv("MOVIETECH_MAX_RUN_USD", "1.00"))
 DEEP_MAX_RUN_USD = float(os.getenv("MOVIETECH_DEEP_MAX_USD", "3.00"))
 CARDS_MAX_RUN_USD = float(os.getenv("MOVIETECH_CARDS_MAX_USD", "2.00"))
 ARCHITECT_MAX_RUN_USD = float(os.getenv("MOVIETECH_ARCHITECT_MAX_USD", "2.00"))
+LEAD_DEV_MAX_RUN_USD = float(os.getenv("MOVIETECH_LEAD_DEV_MAX_USD", "2.00"))
+TEST_ENG_MAX_RUN_USD = float(os.getenv("MOVIETECH_TEST_ENG_MAX_USD", "2.00"))
 
 # --- Ingest -----------------------------------------------------------------
 SEGMENT_MIN_S = 20.0  # merge short shots until a segment is at least this long

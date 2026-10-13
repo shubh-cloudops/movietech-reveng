@@ -32,6 +32,12 @@ def main() -> None:
     p_arch = sub.add_parser("architect", help="design a system for the cards you picked")
     p_arch.add_argument("run_dir", type=Path, help="folder with gate.json")
 
+    p_tasks = sub.add_parser("tasks", help="Lead Developer: break the architecture into tasks")
+    p_tasks.add_argument("run_dir", type=Path, help="folder with plan/architecture.json")
+
+    p_tests = sub.add_parser("tests", help="Test Engineer: write acceptance tests for the tasks")
+    p_tests.add_argument("run_dir", type=Path, help="folder with plan/tasks.json")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -90,6 +96,31 @@ def main() -> None:
         for p in problems:
             print(f"Problem: {p}")
         print(f"Read {args.run_dir / 'plan' / 'architecture.md'}")
+    elif args.command == "tasks":
+        from movietech.lead_dev import lead_dev
+
+        plan, problems = lead_dev(args.run_dir)
+        for m in plan.milestones:
+            print(f"{m.milestone_id}  {m.title}: {len(m.tasks)} tasks "
+                  f"({', '.join(t.task_id for t in m.tasks)})")
+        paid = [t for m in plan.milestones for t in m.tasks if t.paid_resource != "none"]
+        for t in paid:
+            print(f"Paid: {t.task_id} {t.paid_resource}")
+        for p in problems:
+            print(f"Problem: {p}")
+        print(f"Read {args.run_dir / 'plan' / 'tasks.md'}")
+    elif args.command == "tests":
+        from movietech.tester import write_tests
+
+        tests, problems = write_tests(args.run_dir)
+        kinds = {}
+        for t in tests.tests:
+            kinds[t.kind] = kinds.get(t.kind, 0) + 1
+        print(f"{len(tests.tests)} tests: "
+              + ", ".join(f"{n} {k.replace('_', ' ')}" for k, n in kinds.items()))
+        for p in problems:
+            print(f"Problem: {p}")
+        print(f"Read {args.run_dir / 'plan' / 'tests.md'}")
     elif args.command == "costs":
         from movietech.costs import summarise
 
@@ -97,8 +128,8 @@ def main() -> None:
         if not totals:
             print("No costs.jsonl yet. Costs are logged from this version on.")
         for stage, t in totals.items():
-            print(f"{stage:<8} {int(t['calls']):>4} calls  in {int(t['input_tokens']):>9,}  "
+            print(f"{stage:<9} {int(t['calls']):>4} calls  in {int(t['input_tokens']):>9,}  "
                   f"out {int(t['output_tokens']):>7,}  thinking {int(t['thinking_tokens']):>7,}  "
                   f"${t['usd']:.4f}")
         if totals:
-            print(f"{'total':<8} ${sum(t['usd'] for t in totals.values()):.4f}")
+            print(f"{'total':<9} ${sum(t['usd'] for t in totals.values()):.4f}")

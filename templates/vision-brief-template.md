@@ -14,7 +14,7 @@ Keep the headings exactly as written; the pipeline reads them.
 <!-- Pick: web / desktop / mobile / CLI / voice / other (say which). -->
 
 ## Must-haves
-<!-- Up to 5 bullet points. The Architect must cover every one. -->
+<!-- Up to 5 bullet points, one must-have per bullet. The Architect must cover every one and the Test Engineer must prove it, so add a number where you can, e.g. "captions within 2 seconds". -->
 -
 -
 
