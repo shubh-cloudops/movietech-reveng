@@ -22,6 +22,11 @@ software works. For each observation, describe:
 - the interface: layout, panels, colours, typography, icons, animation and transitions
 - the interaction: what the person does (voice, gesture, touch, gaze) and how the UI responds
 - the behaviour: what the software works out, decides or does on its own, and in what order
+- the system behaviour, where the film shows or implies it: data sent or received and to
+  whom (network); data saved, loaded or deleted (storage); other programs or processes it
+  starts, controls or takes over; security (logins, permissions, encryption, locks, and
+  attempts to bypass them); and how it detects or reacts to being watched or tampered with
+Tag these "observed" only when the clip shows them; otherwise "necessary" or "plausible".
 If a UI is shown as a hologram or on a helmet visor, describe the UI itself as if it were on a
 screen. Ignore hardware: suits, robots, weapons, engines, reactors, vehicles and other physical
 devices, and anything the plot, acting or props drive rather than software. Name capabilities
