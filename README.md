@@ -202,6 +202,9 @@ Expected result: one line per clip, then `N scenes from your notes; X of Y clips
 - `Y02 skipped, Gemini could not open ...`: the video is private, removed or blocked in your region. Replace the link and rerun; finished clips are not paid for twice.
 - `not a YouTube link`: only `youtube.com/watch?v=` and `youtu.be/` links are accepted.
 - `no filled-in scenes found`: every scene still has the `00:00:00` placeholder time.
+- To watch the clips again for fresh observations, first move the old ones aside so they aren't skipped: `Rename-Item C:\movietech\output\ironman\deep.jsonl deep_v1.jsonl`.
+
+Both watchers look only at software: the interface, its visual design and how it behaves. Hardware (suits, robots, vehicles) is ignored, and the cards step drops any capability that needs more than a normal computer or phone.
 
 **3. Carry on from the cards step** with `C:\movietech\output\ironman` as the run folder: `cards`, `gate`, `architect`, `tasks`, `tests`, `warroom`, `approve`.
 

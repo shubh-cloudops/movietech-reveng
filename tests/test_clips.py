@@ -97,6 +97,7 @@ def test_writes_deep_jsonl_for_cards(inputs):
     y1 = results[1]
     assert y1.observations[0].at == 2525.0  # 00:42:00 + 5s into the clip
     assert y1.summary.startswith("[Suit test]") and 'titled "Suit test"' in gem.calls[0][1]
+    assert "Ignore hardware" in gem.calls[0][1]  # software, UI and design only
     lines = (run / "deep.jsonl").read_text().splitlines()
     assert [DeepLookResult.model_validate_json(x).segment_id for x in lines] == ["N01", "Y01",
                                                                                  "Y02"]
