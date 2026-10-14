@@ -28,6 +28,9 @@ Rules:
 - Judge feasibility honestly against today's technology and say why in one sentence.
 - Every raw capability name in the input must appear exactly once: in one card's merged_from,
   or in dropped with a reason (for example: plot device, not software; duplicate wording).
+- This project builds software only. Drop any capability that needs hardware beyond a normal
+  computer or phone (with its camera, microphone and screen), with the reason "hardware". If a
+  capability shows a UI on a hologram or visor, keep it as the same UI on a normal screen.
 - Order cards from most to least buildable, then by strength of evidence.
 - Segments from "your notes" (ids N01, N02, ...) are the user's own first-hand scene notes and
   name no raw capabilities. Cite them as evidence, and let them add cards the video missed."""

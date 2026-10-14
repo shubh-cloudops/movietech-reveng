@@ -21,14 +21,13 @@ from movietech import config
 from movietech.costs import CostTracker
 from movietech.gemini import call_with_retry
 from movietech.schemas import DeepLook, DeepLookResult, Observation
-from movietech.watcher_deep import _config, _load_jsonl
+from movietech.watcher_deep import SOFTWARE_FOCUS, _config, _load_jsonl
 
 CLIP_PROMPT = """You are reverse-engineering the fictional software shown in a film.
 This is an official clip from the film, titled "{title}".
 
-Watch the whole clip, including the audio. Describe only software behaviour: what the system
-shows, what it does on its own, and how people control it. Ignore plot, acting and props unless
-software drives them.
+Watch the whole clip, including the audio.
+{focus}
 
 For each observation, give the time in seconds from the start of THIS clip and tag the evidence:
 - observed: you can see or hear it in the clip
@@ -142,8 +141,8 @@ def watch_clips(run_dir: Path, clips_file: Path | None = None, notes_file: Path 
                 video = types.Part(file_data=types.FileData(file_uri=url),
                                    video_metadata=types.VideoMetadata(fps=config.DEEP_FPS))
                 try:
-                    response = call_with_retry(client, model,
-                                               [video, CLIP_PROMPT.format(title=title)], cfg)
+                    prompt = CLIP_PROMPT.format(title=title, focus=SOFTWARE_FOCUS)
+                    response = call_with_retry(client, model, [video, prompt], cfg)
                 except errors.ClientError as e:  # private, removed or region-blocked video
                     warnings.append(f"{seg_id} skipped, Gemini could not open {url}: {e.message}")
                     continue

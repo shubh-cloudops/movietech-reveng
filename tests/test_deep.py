@@ -61,6 +61,7 @@ def test_only_flagged_segments_are_sent(run):
     results = deep_look(run_dir, video, client=client, model="gemini-3.1-pro-preview")
     assert [r.segment_id for r in results] == ["S001", "S003"]
     assert len(client.calls) == 2
+    assert "Ignore hardware" in client.calls[0][1]  # software, UI and design only
     assert (run_dir / "clips" / "S001.mp4").stat().st_size > 0
     assert not (run_dir / "clips" / "S002.mp4").exists()
 

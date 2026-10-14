@@ -16,12 +16,22 @@ from movietech.costs import CostTracker
 from movietech.gemini import call_with_retry
 from movietech.schemas import DeepLook, DeepLookResult, Manifest, Segment, TriageResult
 
+# This project builds software only. Shared by Pass B and the clips input.
+SOFTWARE_FOCUS = """Look only at software: the user interface, its visual design and how the
+software works. For each observation, describe:
+- the interface: layout, panels, colours, typography, icons, animation and transitions
+- the interaction: what the person does (voice, gesture, touch, gaze) and how the UI responds
+- the behaviour: what the software works out, decides or does on its own, and in what order
+If a UI is shown as a hologram or on a helmet visor, describe the UI itself as if it were on a
+screen. Ignore hardware: suits, robots, weapons, engines, reactors, vehicles and other physical
+devices, and anything the plot, acting or props drive rather than software. Name capabilities
+as software a small team could build for a normal computer or phone."""
+
 PROMPT = """You are reverse-engineering the fictional software shown in a film.
 This clip is {start:.0f}s to {end:.0f}s of the film. A first pass flagged it because: {reason}
 
-Watch the whole clip, including the audio. Describe only software behaviour: what the system
-shows, what it does on its own, and how people control it. Ignore plot, acting and props unless
-software drives them.
+Watch the whole clip, including the audio.
+{focus}
 
 For each observation, give the time in seconds from the start of THIS clip and tag the evidence:
 - observed: you can see or hear it in the clip
@@ -97,6 +107,7 @@ def deep_look(run_dir: Path, video: Path, client=None, model: str = config.DEEP_
                 video_metadata=types.VideoMetadata(fps=config.DEEP_FPS),
             )
             prompt = PROMPT.format(start=seg.start, end=seg.end, reason=reasons[seg.segment_id],
+                                   focus=SOFTWARE_FOCUS,
                                    dialogue="\n".join(seg.transcript) or "(none)")
 
             response = call_with_retry(client, model, [video_part, prompt], cfg)
