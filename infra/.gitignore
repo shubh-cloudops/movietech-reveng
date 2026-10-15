@@ -3,4 +3,3 @@
 *.tfstate.*
 terraform.tfvars
 crash.log
-overrides.json

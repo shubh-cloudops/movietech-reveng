@@ -2,21 +2,25 @@ terraform {
   required_version = ">= 1.6"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.0"
     }
   }
 }
 
-provider "aws" {
-  region = var.region
+provider "google" {
+  project = var.project_id
+  region  = var.region
 
-  # Every resource gets these tags, so the bill and the console show what belongs to MovieTech.
-  default_tags {
-    tags = {
-      Project   = "movietech"
-      ManagedBy = "terraform"
-    }
+  # Signed in with your own account (gcloud auth application-default login), the Budgets API
+  # needs a project to bill the API calls to. This uses the MovieTech project.
+  user_project_override = true
+  billing_project       = var.project_id
+
+  # Every resource gets these labels, so the bill and the console show what belongs to MovieTech.
+  default_labels = {
+    project    = "movietech"
+    managed-by = "terraform"
   }
 }

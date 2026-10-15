@@ -1,4 +1,4 @@
-# MovieTech pipeline image: the same image runs on your laptop and on AWS Fargate.
+# MovieTech pipeline image: the same image runs on your laptop and as a Google Cloud Run job.
 FROM python:3.12-slim
 
 # ffmpeg cuts and transcodes the film; nothing else is needed from the OS.
@@ -18,12 +18,12 @@ COPY movietech/ movietech/
 COPY templates/ templates/
 
 # /data must exist and belong to the app user before VOLUME, or it is created root-owned
-# and the pipeline cannot write its outputs (Fargate has no host folder to mount over it).
+# and the pipeline cannot write its outputs (Cloud Run has no host folder to mount over it).
 RUN mkdir /data && chown movietech:movietech /data
 
 USER movietech
-# Inputs and outputs live in /data, mounted from the host (or S3 synced into it on AWS).
+# Inputs and outputs live in /data, mounted from the host (or copied in from Cloud Storage on GCP).
 VOLUME ["/data"]
-# API keys come only from the environment (docker run -e, or Secrets Manager on AWS).
+# API keys come only from the environment (docker run -e, or Secret Manager on GCP).
 ENTRYPOINT ["python", "-m", "movietech"]
 CMD ["--help"]

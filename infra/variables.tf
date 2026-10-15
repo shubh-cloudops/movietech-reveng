@@ -1,34 +1,44 @@
-variable "region" {
-  description = "AWS region for every resource."
+variable "project_id" {
+  description = "The GCP project created for MovieTech (infra/README.md, step 3)."
   type        = string
-  default     = "us-east-1"
+}
+
+variable "billing_account" {
+  description = "Billing account ID from `gcloud billing accounts list`, for the budget alert."
+  type        = string
 }
 
 variable "alert_email" {
-  description = "Where AWS Budgets sends cost alerts. Set it in terraform.tfvars (git-ignored)."
+  description = "Where budget alerts go. Set it in terraform.tfvars (git-ignored)."
   type        = string
 }
 
-variable "budget_usd" {
-  description = "Monthly AWS budget; alerts at 80% actual and 100% forecast."
+variable "region" {
+  description = "Region for every resource. us-central1, us-east1 and us-west1 have free Cloud Storage."
+  type        = string
+  default     = "us-central1"
+}
+
+variable "budget_amount" {
+  description = "Monthly budget in your billing account's currency (5 for USD, about 400 for INR)."
   type        = number
   default     = 5
 }
 
-variable "task_cpu" {
-  description = "Fargate vCPU units (1024 = 1 vCPU)."
-  type        = number
-  default     = 1024
+variable "job_cpu" {
+  description = "vCPUs for each run."
+  type        = string
+  default     = "1"
 }
 
-variable "task_memory" {
-  description = "Fargate memory in MiB."
-  type        = number
-  default     = 2048
+variable "job_memory" {
+  description = "Memory for each run."
+  type        = string
+  default     = "2Gi"
 }
 
 variable "image_tag" {
-  description = "Image tag the task runs; push this tag to ECR before running."
+  description = "Image tag the job runs; push this tag to Artifact Registry before step 9."
   type        = string
   default     = "latest"
 }
