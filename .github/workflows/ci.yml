@@ -46,7 +46,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - name: Format
         run: terraform fmt -check -recursive
-      - name: Validate (no AWS credentials needed)
+      - name: Validate (no GCP credentials needed)
         run: |
           terraform init -backend=false
           terraform validate

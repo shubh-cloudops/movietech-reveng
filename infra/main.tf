@@ -1,236 +1,215 @@
-# MovieTech pipeline on AWS: run one pipeline command at a time as a Fargate task.
-# Nothing runs or bills by the hour between runs except the two secrets ($0.80 a month) and
-# image storage in ECR. `terraform destroy` removes everything, including stored runs.
+# MovieTech pipeline on GCP: run one pipeline command at a time as a Cloud Run job.
+# Nothing runs or bills by the hour between runs. `terraform destroy` removes everything,
+# including stored runs and images.
 
 locals {
-  name = "movietech"
+  name       = "movietech"
+  image_repo = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}"
+
+  # Environment variable the pipeline reads => Secret Manager secret ID.
+  secrets = {
+    ANTHROPIC_API_KEY = "${local.name}-anthropic-api-key"
+    GEMINI_API_KEY    = "${local.name}-gemini-api-key"
+  }
 }
 
-data "aws_caller_identity" "me" {}
+data "google_project" "this" {}
 
-# The default VPC and its public subnets: no NAT gateway (about $32 a month), the task gets a
-# public IP for the run instead and accepts no inbound traffic.
-data "aws_vpc" "default" {
-  default = true
-}
+# ---------- APIs ----------
+# Left on at destroy: an enabled API costs nothing, and turning one off can break other things.
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-  filter {
-    name   = "default-for-az"
-    values = ["true"]
-  }
+resource "google_project_service" "apis" {
+  for_each = toset([
+    "artifactregistry.googleapis.com",
+    "billingbudgets.googleapis.com",
+    "iam.googleapis.com",
+    "logging.googleapis.com",
+    "monitoring.googleapis.com",
+    "run.googleapis.com",
+    "secretmanager.googleapis.com",
+    "storage.googleapis.com",
+  ])
+  service            = each.key
+  disable_on_destroy = false
 }
 
 # ---------- Storage: run folders (inputs and outputs) ----------
 
-resource "aws_s3_bucket" "data" {
-  bucket        = "${local.name}-data-${data.aws_caller_identity.me.account_id}"
-  force_destroy = true # teardown also deletes stored runs
-}
+resource "google_storage_bucket" "data" {
+  name                        = "${local.name}-data-${var.project_id}"
+  location                    = upper(var.region)
+  storage_class               = "STANDARD"
+  force_destroy               = true # teardown also deletes stored runs
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
 
-resource "aws_s3_bucket_public_access_block" "data" {
-  bucket                  = aws_s3_bucket.data.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "data" {
-  bucket = aws_s3_bucket.data.id
-
-  rule {
-    id     = "expire-old-runs"
-    status = "Enabled"
-    filter {
-      prefix = ""
+  lifecycle_rule {
+    condition {
+      age = 30
     }
-    expiration {
-      days = 30
+    action {
+      type = "Delete"
     }
   }
+
+  depends_on = [google_project_service.apis]
 }
 
 # ---------- Image registry ----------
 
-resource "aws_ecr_repository" "app" {
-  name                 = local.name
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
+resource "google_artifact_registry_repository" "images" {
+  repository_id          = local.name
+  location               = var.region
+  format                 = "DOCKER"
+  description            = "MovieTech pipeline image"
+  cleanup_policy_dry_run = false
 
-  image_scanning_configuration {
-    scan_on_push = true
+  # Keep the 2 newest images and delete the rest, so storage stays inside the free 0.5 GB.
+  cleanup_policies {
+    id     = "keep-last-2"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 2
+    }
   }
-}
+  cleanup_policies {
+    id     = "delete-older"
+    action = "DELETE"
+    condition {
+      tag_state = "ANY"
+    }
+  }
 
-resource "aws_ecr_lifecycle_policy" "app" {
-  repository = aws_ecr_repository.app.name
-  policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep only the last 2 images"
-      selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 2 }
-      action       = { type = "expire" }
-    }]
-  })
+  depends_on = [google_project_service.apis]
 }
 
 # ---------- API keys ----------
-# Terraform creates the empty secrets only. You put the values in with the AWS CLI, so the keys
-# never appear in .tf files or in Terraform state.
+# Terraform creates the empty secrets only. You add the values with gcloud, so the keys never
+# appear in .tf files or in Terraform state.
 
-resource "aws_secretsmanager_secret" "api" {
-  for_each                = toset(["ANTHROPIC_API_KEY", "GEMINI_API_KEY"])
-  name                    = "${local.name}/${each.key}"
-  recovery_window_in_days = 0 # delete at once on destroy, so a rebuild can reuse the name
-}
+resource "google_secret_manager_secret" "api" {
+  for_each  = local.secrets
+  secret_id = each.value
 
-# ---------- Logs ----------
+  replication {
+    auto {}
+  }
 
-resource "aws_cloudwatch_log_group" "app" {
-  name              = "/ecs/${local.name}"
-  retention_in_days = 7
+  depends_on = [google_project_service.apis]
 }
 
 # ---------- Permissions ----------
+# The job runs as its own service account that can touch only this bucket and these secrets.
 
-data "aws_iam_policy_document" "ecs_assume" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-  }
+resource "google_service_account" "job" {
+  account_id   = "${local.name}-job"
+  display_name = "MovieTech pipeline job"
+  depends_on   = [google_project_service.apis]
 }
 
-# Execution role: what ECS itself needs to start the task (pull the image, write logs, read keys).
-resource "aws_iam_role" "execution" {
-  name               = "${local.name}-execution"
-  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+resource "google_storage_bucket_iam_member" "job" {
+  bucket = google_storage_bucket.data.name
+  role   = "roles/storage.objectUser" # list, read, write and overwrite objects
+  member = "serviceAccount:${google_service_account.job.email}"
 }
 
-resource "aws_iam_role_policy_attachment" "execution" {
-  role       = aws_iam_role.execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-data "aws_iam_policy_document" "read_secrets" {
-  statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [for s in aws_secretsmanager_secret.api : s.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "read_secrets" {
-  name   = "read-api-keys"
-  role   = aws_iam_role.execution.id
-  policy = data.aws_iam_policy_document.read_secrets.json
-}
-
-# Task role: what the pipeline code may do once running (only this bucket).
-resource "aws_iam_role" "task" {
-  name               = "${local.name}-task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
-}
-
-data "aws_iam_policy_document" "bucket" {
-  statement {
-    actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.data.arn]
-  }
-  statement {
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.data.arn}/*"]
-  }
-}
-
-resource "aws_iam_role_policy" "bucket" {
-  name   = "run-folders"
-  role   = aws_iam_role.task.id
-  policy = data.aws_iam_policy_document.bucket.json
+resource "google_secret_manager_secret_iam_member" "job" {
+  for_each  = google_secret_manager_secret.api
+  secret_id = each.value.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.job.email}"
 }
 
 # ---------- Compute ----------
+# Logs go to Cloud Logging on their own (free up to 50 GiB a month, kept 30 days).
 
-resource "aws_ecs_cluster" "main" {
-  name = local.name
-}
+resource "google_cloud_run_v2_job" "pipeline" {
+  name                = local.name
+  location            = var.region
+  deletion_protection = false # so teardown can delete it
 
-resource "aws_security_group" "task" {
-  name        = "${local.name}-task"
-  description = "Outbound only: model APIs, S3, ECR. No inbound."
-  vpc_id      = data.aws_vpc.default.id
+  template {
+    task_count = 1
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
+    template {
+      service_account = google_service_account.job.email
+      timeout         = "3600s" # a War Room run can take a while
+      max_retries     = 0       # a retry would pay for the same model calls twice
 
-resource "aws_ecs_task_definition" "pipeline" {
-  family                   = local.name
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.task_cpu
-  memory                   = var.task_memory
-  execution_role_arn       = aws_iam_role.execution.arn
-  task_role_arn            = aws_iam_role.task.arn
+      containers {
+        image   = "${local.image_repo}/${local.name}:${var.image_tag}"
+        command = ["python", "-m", "movietech.cloud"]
+        args    = ["output/demo", "--help"] # each run replaces this (see run-job.ps1)
 
-  runtime_platform {
-    operating_system_family = "LINUX"
-    cpu_architecture        = "X86_64"
-  }
+        resources {
+          limits = {
+            cpu    = var.job_cpu
+            memory = var.job_memory
+          }
+        }
 
-  container_definitions = jsonencode([{
-    name       = local.name
-    image      = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
-    essential  = true
-    entryPoint = ["python", "-m", "movietech.cloud"]
-    command    = ["output/demo", "--help"] # each run replaces this (see run-task.ps1)
-    environment = [
-      { name = "MOVIETECH_BUCKET", value = aws_s3_bucket.data.bucket }
-    ]
-    secrets = [for key, s in aws_secretsmanager_secret.api : { name = key, valueFrom = s.arn }]
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.app.name
-        "awslogs-region"        = var.region
-        "awslogs-stream-prefix" = "run"
+        env {
+          name  = "MOVIETECH_BUCKET"
+          value = google_storage_bucket.data.name
+        }
+
+        dynamic "env" {
+          for_each = google_secret_manager_secret.api
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = env.value.secret_id
+                version = "latest"
+              }
+            }
+          }
+        }
       }
     }
-  }])
+  }
+
+  # The job can only start once it may read the secrets and the bucket.
+  depends_on = [google_secret_manager_secret_iam_member.job, google_storage_bucket_iam_member.job]
 }
 
 # ---------- Cost guard ----------
 
-resource "aws_budgets_budget" "monthly" {
-  name         = "${local.name}-monthly"
-  budget_type  = "COST"
-  limit_amount = tostring(var.budget_usd)
-  limit_unit   = "USD"
-  time_unit    = "MONTHLY"
+resource "google_monitoring_notification_channel" "email" {
+  display_name = "MovieTech budget alerts"
+  type         = "email"
+  labels = {
+    email_address = var.alert_email
+  }
+  depends_on = [google_project_service.apis]
+}
 
-  notification {
-    comparison_operator        = "GREATER_THAN"
-    threshold                  = 80
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "ACTUAL"
-    subscriber_email_addresses = [var.alert_email]
+resource "google_billing_budget" "monthly" {
+  billing_account = var.billing_account
+  display_name    = "${local.name}-monthly"
+
+  budget_filter {
+    projects = ["projects/${data.google_project.this.number}"]
   }
 
-  notification {
-    comparison_operator        = "GREATER_THAN"
-    threshold                  = 100
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "FORECASTED"
-    subscriber_email_addresses = [var.alert_email]
+  amount {
+    specified_amount {
+      units = tostring(var.budget_amount) # in the billing account's own currency
+    }
   }
+
+  threshold_rules {
+    threshold_percent = 0.8
+    spend_basis       = "CURRENT_SPEND"
+  }
+  threshold_rules {
+    threshold_percent = 1.0
+    spend_basis       = "FORECASTED_SPEND"
+  }
+
+  all_updates_rule {
+    monitoring_notification_channels = [google_monitoring_notification_channel.email.id]
+  }
+
+  depends_on = [google_project_service.apis]
 }

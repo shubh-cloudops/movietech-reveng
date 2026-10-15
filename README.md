@@ -247,7 +247,7 @@ tests that cover it. Run it after `approve`.
 
 ## Run it in Docker (Windows 11, PowerShell)
 
-The same image runs on your laptop and, later, on AWS Fargate. Prerequisite: Docker Desktop with the WSL2 backend, started.
+The same image runs on your laptop and, later, as a Google Cloud Run job. Prerequisite: Docker Desktop with the WSL2 backend, started.
 
 1. Check Docker is running:
    ```powershell
@@ -306,9 +306,9 @@ movietech/
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
   issues.py          export the approved plan to GitHub Issues (via the gh CLI)
-  cloud.py           Fargate runner: copy a run folder from S3, run one command, copy it back
+  cloud.py           Cloud Run runner: copy a run folder from Cloud Storage, run one command, copy it back
 templates/           Vision Brief, scene notes and clip list templates
-infra/               Terraform for AWS (S3, ECR, Fargate, Secrets Manager); see infra/README.md
+infra/               Terraform for GCP (Cloud Storage, Artifact Registry, Cloud Run, Secret Manager); see infra/README.md
 tests/               pytest; Gemini and Claude are faked so CI needs no keys
 ```
 

@@ -1,4 +1,6 @@
 # Copy to terraform.tfvars (git-ignored) and fill in.
-alert_email = "you@example.com"
-# region    = "us-east-1"
-# budget_usd = 5
+project_id      = "movietech-12345"
+billing_account = "000000-000000-000000"
+alert_email     = "you@example.com"
+# region        = "us-central1"
+# budget_amount = 5

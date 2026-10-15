@@ -1,7 +1,7 @@
-"""Run one pipeline command on AWS Fargate.
+"""Run one pipeline command as a Google Cloud Run job.
 
-The container has no disk that outlives it, so the run folder lives in S3. This copies
-s3://<bucket>/<prefix>/ into /data/<prefix>/, runs the command, then copies the folder back,
+The container has no disk that outlives it, so the run folder lives in Cloud Storage. This copies
+gs://<bucket>/<prefix>/ into /data/<prefix>/, runs the command, then copies the folder back,
 even when the command fails, so the cost ledger and any finished stage are kept.
 
     python -m movietech.cloud output/tony_bruce costs /data/output/tony_bruce
@@ -14,52 +14,49 @@ from pathlib import Path
 DATA = Path("/data")
 
 
-def download(s3, bucket: str, prefix: str, root: Path) -> int:
-    """Copy every object under prefix/ into root, keeping the key as the relative path."""
+def download(gcs, bucket: str, prefix: str, root: Path) -> int:
+    """Copy every object under prefix/ into root, keeping the object name as the relative path."""
     count = 0
-    pages = s3.get_paginator("list_objects_v2").paginate(Bucket=bucket,
-                                                        Prefix=prefix.rstrip("/") + "/")
-    for page in pages:
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            target = (root / key).resolve()
-            if key.endswith("/") or not target.is_relative_to(root.resolve()):
-                continue  # folder markers, and keys that would escape /data
-            target.parent.mkdir(parents=True, exist_ok=True)
-            s3.download_file(bucket, key, str(target))
-            count += 1
+    for blob in gcs.list_blobs(bucket, prefix=prefix.rstrip("/") + "/"):
+        target = (root / blob.name).resolve()
+        if blob.name.endswith("/") or not target.is_relative_to(root.resolve()):
+            continue  # folder markers, and names that would escape /data
+        target.parent.mkdir(parents=True, exist_ok=True)
+        blob.download_to_filename(str(target))
+        count += 1
     return count
 
 
-def upload(s3, bucket: str, prefix: str, root: Path) -> int:
-    """Copy every file under root/prefix back to the same keys."""
+def upload(gcs, bucket: str, prefix: str, root: Path) -> int:
+    """Copy every file under root/prefix back to the same object names."""
     count = 0
+    target = gcs.bucket(bucket)
     for path in sorted((root / prefix).rglob("*")):
         if path.is_file():
-            s3.upload_file(str(path), bucket, path.relative_to(root).as_posix())
+            target.blob(path.relative_to(root).as_posix()).upload_from_filename(str(path))
             count += 1
     return count
 
 
-def run(argv: list[str], s3=None, root: Path = DATA, bucket: str | None = None,
+def run(argv: list[str], gcs=None, root: Path = DATA, bucket: str | None = None,
         main=None) -> None:
     if len(argv) < 2:
-        raise SystemExit("usage: python -m movietech.cloud <s3 prefix> <command> [args...]")
+        raise SystemExit("usage: python -m movietech.cloud <gcs prefix> <command> [args...]")
     prefix, command = argv[0].strip("/"), argv[1:]
-    bucket = bucket or os.environ["MOVIETECH_BUCKET"]  # set by the ECS task definition
-    if s3 is None:
-        import boto3  # only needed in the cloud
+    bucket = bucket or os.environ["MOVIETECH_BUCKET"]  # set by the Cloud Run job
+    if gcs is None:
+        from google.cloud import storage  # only needed in the cloud
 
-        s3 = boto3.client("s3")
+        gcs = storage.Client()  # signs in as the job's service account
     if main is None:
         from movietech.cli import main
 
-    print(f"Downloaded {download(s3, bucket, prefix, root)} files from s3://{bucket}/{prefix}/")
+    print(f"Downloaded {download(gcs, bucket, prefix, root)} files from gs://{bucket}/{prefix}/")
     sys.argv = ["movietech", *command]
     try:
         main()
     finally:
-        print(f"Uploaded {upload(s3, bucket, prefix, root)} files to s3://{bucket}/{prefix}/")
+        print(f"Uploaded {upload(gcs, bucket, prefix, root)} files to gs://{bucket}/{prefix}/")
 
 
 if __name__ == "__main__":
