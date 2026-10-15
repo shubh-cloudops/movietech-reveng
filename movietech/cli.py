@@ -55,6 +55,11 @@ def main() -> None:
     p_ok.add_argument("run_dir", type=Path)
     p_ok.add_argument("--notes", default="", help="anything you want on record")
 
+    p_issues = sub.add_parser("issues", help="export the approved plan's tasks to GitHub Issues")
+    p_issues.add_argument("run_dir", type=Path)
+    p_issues.add_argument("--repo", required=True, help="owner/name of the repo to file them in")
+    p_issues.add_argument("--dry-run", action="store_true", help="list the issues, create none")
+
     p_costs = sub.add_parser("costs", help="show estimated spend per stage for a run")
     p_costs.add_argument("run_dir", type=Path)
 
@@ -177,6 +182,12 @@ def main() -> None:
             print(f"Gate failing: {g}")
         print(stopped)
         print(f"Read {args.run_dir / 'plan' / 'warroom.md'}")
+    elif args.command == "issues":
+        from movietech.issues import export
+
+        created = export(args.run_dir, args.repo, dry_run=args.dry_run)
+        if not args.dry_run:
+            print(f"Created {len(created)} issues. Record: {args.run_dir / 'plan' / 'issues.json'}")
     elif args.command == "approve":
         from movietech.warroom import approve
 
