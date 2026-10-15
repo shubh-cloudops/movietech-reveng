@@ -3,9 +3,12 @@
 from pathlib import Path
 
 import anthropic
+import pydantic
 
 from movietech import config
 from movietech.costs import BudgetExceeded, CostTracker
+
+ANSWER_ATTEMPTS = 2  # a broken-JSON answer is asked again once
 
 
 def check_worst_case(model: str, prompt: str, max_tokens: int, max_usd: float,
@@ -35,16 +38,27 @@ def structured_call(*, client, model: str, system: str, user: str, output_format
     fallback = ({"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
                 if model in config.SERVER_FALLBACK_MODELS else {})
     # Streaming keeps a long answer from hitting the HTTP timeout.
-    with client.beta.messages.stream(
-        model=model,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-        output_config={"effort": effort},
-        output_format=output_format,
-        **fallback,
-    ) as stream:
-        message = stream.get_final_message()
+    for attempt in range(1, ANSWER_ATTEMPTS + 1):
+        try:
+            with client.beta.messages.stream(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                output_config={"effort": effort},
+                output_format=output_format,
+                **fallback,
+            ) as stream:
+                message = stream.get_final_message()
+            break
+        except pydantic.ValidationError:  # the answer stopped mid-JSON; its cost is not logged
+            if attempt == ANSWER_ATTEMPTS:
+                raise RuntimeError(
+                    f"{stage}: the answer came back as broken JSON {ANSWER_ATTEMPTS} times. "
+                    "Rerun, or set this stage's model environment variable to "
+                    "claude-sonnet-5-5.") from None
+            print(f"{stage}: the answer came back as broken JSON; asking again "
+                  f"({attempt + 1} of {ANSWER_ATTEMPTS}).")
     tracker.add(message.usage, item="all", model=message.model)
 
     if message.stop_reason == "refusal":
