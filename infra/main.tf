@@ -64,12 +64,13 @@ resource "google_artifact_registry_repository" "images" {
   description            = "MovieTech pipeline image"
   cleanup_policy_dry_run = false
 
-  # Keep the 2 newest images and delete the rest, so storage stays inside the free 0.5 GB.
+  # Keep only the newest image and delete the rest, so storage stays inside the free 0.5 GB
+  # (CI checks the image is under 450 MB compressed).
   cleanup_policies {
-    id     = "keep-last-2"
+    id     = "keep-newest"
     action = "KEEP"
     most_recent_versions {
-      keep_count = 2
+      keep_count = 1
     }
   }
   cleanup_policies {

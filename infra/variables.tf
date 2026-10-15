@@ -20,9 +20,9 @@ variable "region" {
 }
 
 variable "budget_amount" {
-  description = "Monthly budget in your billing account's currency (5 for USD, about 400 for INR)."
+  description = "Monthly budget in your billing account's currency. 1 USD (about 85 INR) means any charge at all is emailed."
   type        = number
-  default     = 5
+  default     = 1
 }
 
 variable "job_cpu" {

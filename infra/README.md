@@ -9,19 +9,26 @@ laptop ── docker push ──▶ Artifact Registry ──▶ Cloud Run job �
    └── gcloud storage rsync ──▶ Cloud Storage ◀───┘    └── API keys from Secret Manager
 ```
 
-| Resource | Why | Cost (us-central1, check current pricing) |
-|---|---|---|
-| Cloud Storage bucket | Run folders; private, deleted after 30 days | Free up to 5 GB in us-central1, us-east1, us-west1 |
-| Artifact Registry repository | The Docker image; keeps the newest 2 | Free up to 0.5 GB, then $0.10 per GB a month |
-| Secret Manager, 2 secrets | Claude and Gemini keys, never in code or state | Free up to 6 secret versions |
-| Cloud Run job, 1 vCPU / 2 GiB | Runs one command, then stops | Inside the monthly free allowance; beyond it about $0.08 an hour |
-| Cloud Logging | Job output, kept 30 days | Free up to 50 GiB a month |
-| Billing budget + email channel | Email at 80% of the budget and when the forecast passes it | Free |
+Everything here sits inside Google Cloud's always-free limits (monthly, us-central1, checked
+2026-10-15 against cloud.google.com/run/pricing and cloud.google.com/free; limits can change):
 
-Built, tried and destroyed the same day: **$0 expected**. Left in place for a month and not used:
-**$0 to a few cents** (only if the 2 images pass 0.5 GB). Model API calls are billed by Anthropic
-and Google as usual. Cloud Run needs a billing account even inside the free allowance; a new
-account's free trial credit covers this.
+| Resource | Why | Free limit | What MovieTech uses |
+|---|---|---|---|
+| Cloud Run job, 1 vCPU / 2 GiB | Runs one command, then stops | 240,000 vCPU-seconds and 450,000 GiB-seconds | About 60 hours of runs a month before any charge |
+| Artifact Registry | The Docker image | 0.5 GB | One image kept; CI fails if it passes 450 MB |
+| Cloud Storage bucket | Run folders; private, deleted after 30 days | 5 GB in us-central1, us-east1, us-west1 only | A few MB per run |
+| Secret Manager | Claude and Gemini keys, never in code or state | 6 secret versions, 10,000 reads | 2 versions, 2 reads per run |
+| Cloud Logging | Job output, kept 30 days | 50 GiB | KB per run |
+| Network out to the internet | Calls to the Claude and Gemini APIs | 1 GiB in North America | KB per call |
+| Billing budget + email channel | Email at 80% of $1 and when the forecast passes $1 | Free | |
+
+Expected bill: **$0**. Model API calls are billed by Anthropic and Google as usual.
+
+Keep it at $0:
+- Stay on the free trial: Google never charges a free-trial account until you click **Activate full account**; don't.
+- Keep `region = "us-central1"`; other regions have no free Cloud Storage.
+- When you replace an API key, disable the old version (`gcloud secrets versions disable 1 --secret ...`) so you stay under 6.
+- Run `terraform destroy` when you are done (see Teardown).
 
 **Why:** a Cloud Run job has no 15-minute limit and bills only while it runs, and the pipeline sits in its own project so teardown never touches the repair app's Firebase project.
 Advanced option: GitHub Actions pushing images through Workload Identity Federation, and a remote Cloud Storage state backend.
@@ -59,9 +66,11 @@ Advanced option: GitHub Actions pushing images through Workload Identity Federat
    ```powershell
    gcloud billing projects link $project --billing-account 0X0X0X-0X0X0X-0X0X0X
    gcloud services enable cloudresourcemanager.googleapis.com
+   gcloud auth application-default set-quota-project $project
    $project
    ```
-   Use your own account ID. Expected result: `billingEnabled: true`, `Operation ... finished successfully`, then your project ID. Note it down.
+   Use your own account ID. Expected result: `billingEnabled: true`, `Operation ... finished successfully`, `Quota project "movietech-..." was added to ADC`, then your project ID. Note it down.
+   The quota project line stops the "Cannot find a quota project" warnings.
    Terraform enables the other APIs itself; it needs this one first to read the project.
 4. **Fill in your settings**:
    ```powershell
@@ -69,7 +78,7 @@ Advanced option: GitHub Actions pushing images through Workload Identity Federat
    notepad infra\terraform.tfvars
    ```
    Set `project_id` (from step 3), `billing_account` (from step 3) and `alert_email`, then save.
-   If your billing account is not in USD, set `budget_amount` in that currency (for example `400` for INR).
+   If your billing account is not in USD, set `budget_amount` in that currency (for example `85` for INR).
 5. **Preview** ($0):
    ```powershell
    terraform -chdir=infra init
