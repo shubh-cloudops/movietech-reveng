@@ -31,10 +31,10 @@ SKEPTIC_MAX_TOKENS = 32768
 GROUNDER_MODEL = os.getenv("MOVIETECH_GROUNDER_MODEL", "claude-haiku-5-5")
 COST_OPS_MODEL = os.getenv("MOVIETECH_COST_OPS_MODEL", "claude-haiku-5-5")
 REVIEW_EFFORT = os.getenv("MOVIETECH_REVIEW_EFFORT", "high")  # Grounder and Cost/Ops
-REVIEW_MAX_TOKENS = 16000
+REVIEW_MAX_TOKENS = 32000  # a 35-task plan overflowed 16K; at most $0.02 of output on Haiku
 CHAIRMAN_MODEL = os.getenv("MOVIETECH_CHAIRMAN_MODEL", "claude-opus-5-5")
 CHAIRMAN_EFFORT = os.getenv("MOVIETECH_CHAIRMAN_EFFORT", "high")
-CHAIRMAN_MAX_TOKENS = 16000
+CHAIRMAN_MAX_TOKENS = 32000  # room to rule on many objections; at most $0.64 on Opus
 REVISE_EFFORT = os.getenv("MOVIETECH_REVISE_EFFORT", "medium")  # authors fixing objections
 WARROOM_MAX_ROUNDS = 3
 # Server-side refusal fallback is offered on these models only (not on Haiku).
