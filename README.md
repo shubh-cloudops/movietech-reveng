@@ -215,6 +215,36 @@ Remove-Item -Recurse -Force C:\movietech\output\ironman
 
 ---
 
+## Export the approved plan to GitHub Issues ($0)
+
+One issue per task, titled `T01: ...`, with a label per milestone (`M1`, `M2`, ...). Each issue has the
+task description, "done when", its dependencies as issue links, the files it touches and the acceptance
+tests that cover it. Run it after `approve`.
+
+1. Install and sign in to the GitHub CLI (once). The token stays in the CLI, never in this repo:
+   ```powershell
+   winget install --id GitHub.cli -e
+   gh auth login
+   ```
+   Close and reopen PowerShell first if `gh` is not found. Choose GitHub.com, HTTPS, and "Login with a web browser".
+   Expected result: `Logged in as <your username>`.
+2. Preview without creating anything:
+   ```powershell
+   python -m movietech issues C:\movietech\output\tony_bruce --repo <owner>/<repo> --dry-run
+   ```
+   Expected result: one `would create  T01: ...  [M1]` line per task.
+3. Create them:
+   ```powershell
+   python -m movietech issues C:\movietech\output\tony_bruce --repo <owner>/<repo>
+   ```
+   Expected result: one issue URL per task, then `Created N issues`. If it stops partway, rerun the same
+   command: tasks already listed in `plan\issues.json` are skipped, so nothing is duplicated.
+   `Could not resolve to a Repository` means the repo name is wrong or does not exist yet.
+
+**Teardown:** close the issues in the GitHub web UI (or delete the repo), then delete `plan\issues.json`.
+
+---
+
 ## Run it in Docker (Windows 11, PowerShell)
 
 The same image runs on your laptop and, later, on AWS Fargate. Prerequisite: Docker Desktop with the WSL2 backend, started.
@@ -275,6 +305,7 @@ movietech/
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
+  issues.py          export the approved plan to GitHub Issues (via the gh CLI)
   cloud.py           Fargate runner: copy a run folder from S3, run one command, copy it back
 templates/           Vision Brief, scene notes and clip list templates
 infra/               Terraform for AWS (S3, ECR, Fargate, Secrets Manager); see infra/README.md
