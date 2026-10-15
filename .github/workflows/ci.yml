@@ -35,6 +35,11 @@ jobs:
           docker run --rm --entrypoint ffmpeg movietech:ci -version
           test "$(docker run --rm --entrypoint id movietech:ci -u)" = "1000"
           docker run --rm --entrypoint touch movietech:ci /data/write-check
+      - name: Image fits the Artifact Registry free tier (0.5 GB, one image kept)
+        run: |
+          size=$(docker save movietech:ci | gzip -1 | wc -c)
+          echo "Compressed image: $((size / 1000000)) MB (limit 450 MB)"
+          test "$size" -lt 450000000
 
   terraform:
     runs-on: ubuntu-latest

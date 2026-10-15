@@ -3,4 +3,4 @@ project_id      = "movietech-12345"
 billing_account = "000000-000000-000000"
 alert_email     = "you@example.com"
 # region        = "us-central1"
-# budget_amount = 5
+# budget_amount = 1
