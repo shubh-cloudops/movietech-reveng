@@ -22,3 +22,18 @@ jobs:
         run: ruff check .
       - name: Test (no API keys needed; Gemini is faked)
         run: pytest -q
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format
+        run: terraform fmt -check -recursive
+      - name: Validate (no AWS credentials needed)
+        run: |
+          terraform init -backend=false
+          terraform validate
