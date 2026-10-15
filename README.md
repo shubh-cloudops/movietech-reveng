@@ -215,6 +215,44 @@ Remove-Item -Recurse -Force C:\movietech\output\ironman
 
 ---
 
+## Run it in Docker (Windows 11, PowerShell)
+
+The same image runs on your laptop and, later, on AWS Fargate. Prerequisite: Docker Desktop with the WSL2 backend, started.
+
+1. Check Docker is running:
+   ```powershell
+   docker version
+   ```
+   Expected result: a `Client` and a `Server` section. If `Server` shows an error, start Docker Desktop, wait for "Engine running", and retry.
+2. Build the image from the repo folder (first build takes a few minutes):
+   ```powershell
+   docker build -t movietech:local .
+   ```
+   Expected result: the last line names `docker.io/library/movietech:local`.
+3. Check it starts ($0):
+   ```powershell
+   docker run --rm movietech:local --help
+   ```
+   Expected result: the list of commands (`ingest`, `triage`, ... `approve`, `costs`).
+4. Run a stage against your existing folders. `-v C:\movietech:/data` makes `C:\movietech` appear as `/data` inside the container, so paths use forward slashes. This one is free:
+   ```powershell
+   docker run --rm -v C:\movietech:/data movietech:local costs /data/output/tony_bruce
+   ```
+   Expected result: the same cost table as running `python -m movietech costs` directly.
+5. For a paid stage, pass the keys through with `-e NAME` and no value. Docker copies them from your environment, so they never appear in the command, the image or your history:
+   ```powershell
+   docker run --rm -e ANTHROPIC_API_KEY -e GEMINI_API_KEY -v C:\movietech:/data movietech:local cards /data/output/tos
+   ```
+   A `401` means the key is not set in this PowerShell window.
+
+**Teardown**
+```powershell
+docker image rm movietech:local
+docker builder prune -f
+```
+
+---
+
 ## Project layout
 ```
 movietech/

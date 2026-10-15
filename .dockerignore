@@ -1,0 +1,16 @@
+# Only the code and templates go into the image; never films, outputs or secrets.
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+tests
+input
+output
+.env
+*.mp4
+*.mkv
+*.mov

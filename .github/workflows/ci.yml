@@ -22,3 +22,15 @@ jobs:
         run: ruff check .
       - name: Test (no API keys needed; Gemini is faked)
         run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t movietech:ci .
+      - name: Smoke test (starts, has ffmpeg, runs as a normal user)
+        run: |
+          docker run --rm movietech:ci --help
+          docker run --rm --entrypoint ffmpeg movietech:ci -version
+          test "$(docker run --rm --entrypoint id movietech:ci -u)" = "1000"
