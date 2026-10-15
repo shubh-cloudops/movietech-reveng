@@ -17,6 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY movietech/ movietech/
 COPY templates/ templates/
 
+# /data must exist and belong to the app user before VOLUME, or it is created root-owned
+# and the pipeline cannot write its outputs (Fargate has no host folder to mount over it).
+RUN mkdir /data && chown movietech:movietech /data
+
 USER movietech
 # Inputs and outputs live in /data, mounted from the host (or S3 synced into it on AWS).
 VOLUME ["/data"]

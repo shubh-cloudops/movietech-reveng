@@ -275,7 +275,9 @@ movietech/
   costs.py           cost cap and per-call ledger (costs.jsonl)
   gemini.py          retry helper for Gemini calls
   cli.py             python -m movietech ...
+  cloud.py           Fargate runner: copy a run folder from S3, run one command, copy it back
 templates/           Vision Brief, scene notes and clip list templates
+infra/               Terraform for AWS (S3, ECR, Fargate, Secrets Manager); see infra/README.md
 tests/               pytest; Gemini and Claude are faked so CI needs no keys
 ```
 
