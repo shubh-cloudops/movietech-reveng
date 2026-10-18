@@ -2,7 +2,7 @@
 
 A multi-agent pipeline that watches a film, reverse-engineers the fictional software it shows, and produces a tested, executable project plan.
 
-**Status:** Step 10 of the build: the whole pipeline from film to an approved, reviewed plan, from your own video file or from official YouTube clips plus your scene notes. Next: Docker, Terraform and the GitHub Issues export.
+**Status:** complete. Every stage from film to an approved, reviewed plan works, runs in Docker, and has run as a Cloud Run job on Google Cloud (Terraform, applied and torn down). The cloud resources are deleted; the code, tests and CI stay here.
 
 ```
 video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest.json
@@ -50,6 +50,37 @@ video ──► Ingestor (ffmpeg + PySceneDetect + subtitles) ──► manifest
 | Final gate | You approve. `PLAN.md` collects the debate result, architecture, tasks and tests in one file, and `approval.json` records any objections still open when you signed off | No |
 
 Why the split: the cheap, repeatable work is plain code, and only the judgement goes to a model. A 2-hour film shrinks to the 20–40 segments worth an expensive look.
+
+---
+
+## Results
+
+Two real runs, costs taken from each run's `costs.jsonl`:
+
+| Run | Input | Output | Model cost |
+|---|---|---|---|
+| Dry run | *Tears of Steel* (CC BY, 12 min) | 18 capability cards, 8 components, 21 tasks, 25 tests, 3 War Room rounds | about $4.39 |
+| Real run | Official YouTube clips of Tony Stark and Bruce Banner at work | Card "Multi-Panel Data Workspace" turned into a plan for an appliance repair centre: 12 components, 35 tasks, 35 tests, approved with notes | $6.69 |
+
+The real run's plan was exported to GitHub Issues with `python -m movietech issues` and then built as
+a separate app (a React PWA on Firebase, private repo). Its public demo, on made-up data:
+https://repair-centre-demo.web.app
+
+What the runs taught, and what changed because of them:
+- A reviewer hitting its 16K output limit crashed the War Room, so review and Chairman calls now get 32K (#11).
+- Haiku occasionally returned cut-off JSON, so every structured call retries once (#12).
+- Watchers carded hardware (suits, vehicles); they now observe software and UI only (#10).
+- The cloud runner moved from AWS (#14) to GCP (#16) to stay inside always-free limits (#17).
+
+## Cloud and CI
+
+- **CI (GitHub Actions):** ruff, pytest with Gemini and Claude faked (no keys in CI), a Docker build with
+  smoke tests, an image-size check against the Artifact Registry free tier, and `terraform validate`.
+- **Infra (`infra/`, Terraform):** Cloud Storage, Artifact Registry, Secret Manager, a Cloud Run job, a
+  service account and a billing budget, 19 resources. Applied, used to run a pipeline command as a Cloud Run job, then destroyed with
+  `terraform destroy`. Steps, costs and teardown: [infra/README.md](infra/README.md).
+- **Secrets:** API keys live in environment variables locally and in Secret Manager in the cloud, never in
+  code, images or Terraform state.
 
 ---
 
